@@ -1,0 +1,34 @@
+Loaded 352 rows × 149 columns from data/synthetic/intelli_credit_dataset.csv
+
+======================================================================
+  INTELLI-CREDIT  --  DATASET VALIDATION REPORT
+======================================================================
+  [PASS] Total row count is reasonable (300-500)  (352 rows)
+  [PASS] Default rate is ~25-45%  (31.8% default rate)
+  [PASS] No completely null columns  (All columns have data)
+  [PASS] No unexpected columns with >50% nulls  (OK)
+  [PASS] Healthy DSCR median is in 1.0-5.0 range  (Median = 3.31)
+  [PASS] Defaulted DSCR median is lower than healthy  (Defaulted median = 0.47 vs healthy = 3.31)
+  [PASS] Defaulted DSCR median is in 0.0-2.5 range  (Median = 0.47)
+  [PASS] Beneish manipulation flag rates (INFO)  (Defaulted flag rate = 33.0%, Healthy = 39.2%)
+  [PASS] Beneish M-Score threshold is -2.22 (flag = m_score > -2.22)  (Threshold correctly applied)
+  [PASS] Healthy Altman Z-Score median > Defaulted median  (Healthy = 3.02, Defaulted = 0.92)
+  [PASS] Healthy Piotroski F-Score median >= Defaulted median  (Healthy = 6.0, Defaulted = 4.0)
+  [PASS] Training CSV exists  (data/synthetic/intelli_credit_dataset.csv)
+  [PASS] Demo CSV exists  (data/synthetic/demo_sunrise_textile.csv)
+  [PASS] Schema JSON exists  (data/synthetic/schema.json)
+  [PASS] 30 companies present (15 defaulted + 15 healthy)  (30 unique companies)
+----------------------------------------------------------------------
+  Result: 15/15 passed  --  ALL CHECKS PASSED
+======================================================================
+
+Generating validation charts...
+
+  [CHART] Saved -> data/synthetic/validation_charts\dscr_distribution.png
+  [CHART] Saved -> data/synthetic/validation_charts\beneish_distribution.png
+  [CHART] Saved -> data/synthetic/validation_charts\dscr_trajectories.png
+
+======================================================================
+  [OK] VALIDATION COMPLETE -- Dataset is ready for model training.
+======================================================================
+

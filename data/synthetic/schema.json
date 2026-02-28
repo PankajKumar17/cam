@@ -1,0 +1,747 @@
+{
+  "company_name": {
+    "dtype": "str",
+    "non_null": 352,
+    "sample": "Alok Industries"
+  },
+  "sector": {
+    "dtype": "str",
+    "non_null": 352,
+    "sample": "Textiles"
+  },
+  "fiscal_year": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "2009"
+  },
+  "label": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "1"
+  },
+  "years_to_default": {
+    "dtype": "float64",
+    "non_null": 112,
+    "sample": "8.0"
+  },
+  "sector_npa_rate": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.09"
+  },
+  "revenue": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "24933.35"
+  },
+  "cogs": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "15088.94"
+  },
+  "gross_profit": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "9844.41"
+  },
+  "ebitda": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "3242.21"
+  },
+  "depreciation": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "1884.98"
+  },
+  "ebit": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "1357.23"
+  },
+  "interest_expense": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "748.0"
+  },
+  "pbt": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "609.23"
+  },
+  "tax": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "152.31"
+  },
+  "pat": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "456.92"
+  },
+  "sga_expense": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "1147.89"
+  },
+  "employee_cost": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "4054.11"
+  },
+  "total_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "36291.73"
+  },
+  "fixed_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "17042.17"
+  },
+  "cwip": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "3448.99"
+  },
+  "total_investments": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "874.45"
+  },
+  "trade_receivables": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "2992.0"
+  },
+  "inventories": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "5419.2"
+  },
+  "cash_equivalents": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "2143.71"
+  },
+  "other_current_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "2803.74"
+  },
+  "total_current_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "13358.66"
+  },
+  "equity_share_capital": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "1279.04"
+  },
+  "reserves_surplus": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "7049.94"
+  },
+  "total_equity": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "8328.98"
+  },
+  "lt_borrowings": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "9072.93"
+  },
+  "st_borrowings": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "5443.76"
+  },
+  "total_debt": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "14516.69"
+  },
+  "trade_payables": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "4934.57"
+  },
+  "other_current_liab": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "3425.57"
+  },
+  "total_current_liab": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "13803.91"
+  },
+  "cfo": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "2341.9"
+  },
+  "cfi": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "-624.6"
+  },
+  "cff": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "907.29"
+  },
+  "capex": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "624.6"
+  },
+  "free_cash_flow": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "1717.3"
+  },
+  "promoter_holding_pct": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.5029"
+  },
+  "promoter_pledge_pct": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.2313"
+  },
+  "promoter_pledge_change": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.0"
+  },
+  "institutional_holding_pct": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.1873"
+  },
+  "auditor_changes_3yr": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "auditor_big4": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "din_disqualified_count": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "1"
+  },
+  "related_party_tx_to_rev": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.0954"
+  },
+  "dividend_payout_ratio": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.1256"
+  },
+  "going_concern_flag": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "qualified_opinion_flag": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "emphasis_matter_flag": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "scope_limitation_flag": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "auditor_resigned_flag": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "auditor_distress_score": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "2"
+  },
+  "promoter_total_companies": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "4"
+  },
+  "promoter_npa_companies": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "promoter_struck_off_companies": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "network_npa_ratio": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.0"
+  },
+  "contagion_risk_score": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.3081"
+  },
+  "customer_concentration": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.3808"
+  },
+  "supplier_concentration": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.5171"
+  },
+  "satellite_activity_score": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "80.21"
+  },
+  "satellite_activity_category": {
+    "dtype": "str",
+    "non_null": 352,
+    "sample": "ACTIVE"
+  },
+  "satellite_vs_revenue_flag": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "gst_vs_bank_divergence": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.0"
+  },
+  "gst_divergence_flag": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "gst_filing_delays_count": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "ewaybill_volume_consistency": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.883"
+  },
+  "gst_payment_delay_days": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "24.7"
+  },
+  "ceo_sentiment_overall": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.466"
+  },
+  "ceo_sentiment_revenue": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.2041"
+  },
+  "ceo_sentiment_debt": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.2629"
+  },
+  "ceo_deflection_score": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.2341"
+  },
+  "ceo_overconfidence_score": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.2681"
+  },
+  "ceo_specificity_score": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.3444"
+  },
+  "debt_to_equity": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "1.7429132976975676"
+  },
+  "debt_to_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.39999994488000434"
+  },
+  "lt_debt_to_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.24999993110689403"
+  },
+  "st_debt_to_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.15000001377311029"
+  },
+  "equity_to_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.22950077055490323"
+  },
+  "interest_coverage": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "1.8144786071998948"
+  },
+  "current_ratio": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.9677446461931623"
+  },
+  "quick_ratio": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.5751602263000005"
+  },
+  "dscr": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "1.3443721207885704"
+  },
+  "ebitda_margin": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.1300350735007516"
+  },
+  "net_margin": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.01832565619869269"
+  },
+  "gross_margin": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.39482901413589316"
+  },
+  "roe": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.05485905836550706"
+  },
+  "roa": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.012590196168311894"
+  },
+  "ebitda_to_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.0893374330711339"
+  },
+  "ebitda_to_equity": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.3892685538458168"
+  },
+  "ebitda_to_fin_exp": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "4.334505341798789"
+  },
+  "cfo_to_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.0645298529426806"
+  },
+  "cfo_to_equity": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.2811748857265626"
+  },
+  "cfo_to_sales": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.09392640779943624"
+  },
+  "cfo_to_debt": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.16132465457612413"
+  },
+  "asset_turnover": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.6870256667101009"
+  },
+  "inventory_days": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "131.08992413442627"
+  },
+  "receivables_days": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "43.79997072018802"
+  },
+  "payables_days": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "119.3667712828491"
+  },
+  "cash_conversion_cycle": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "55.52312357176518"
+  },
+  "ln_total_assets": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "10.499345170605723"
+  },
+  "ln_revenue": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "10.123961543743434"
+  },
+  "ln_net_income": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "6.124508320865746"
+  },
+  "revenue_growth": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "-0.4510107947788805"
+  },
+  "ebitda_growth": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "-0.26547632633296425"
+  },
+  "pat_growth": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "0.7221395430272257"
+  },
+  "cfo_growth": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "-0.2704470728895342"
+  },
+  "total_equity_growth": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "-0.0716642373976164"
+  },
+  "total_debt_growth": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "-0.2605256432423646"
+  },
+  "total_assets_growth": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "-0.2605260206664163"
+  },
+  "trade_receivables_growth": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "-0.4510093582887701"
+  },
+  "dscr_velocity": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "-0.0180372632160819"
+  },
+  "interest_coverage_velocity": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "1.7405087209829724"
+  },
+  "debt_to_equity_velocity": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "-0.3545797425253354"
+  },
+  "net_margin_velocity": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "0.03916060562669146"
+  },
+  "dscr_acceleration": {
+    "dtype": "float64",
+    "non_null": 293,
+    "sample": "-0.5345717535342055"
+  },
+  "debt_acceleration": {
+    "dtype": "float64",
+    "non_null": 293,
+    "sample": "1.1311016806238707"
+  },
+  "dscr_3yr_slope": {
+    "dtype": "float64",
+    "non_null": 293,
+    "sample": "-0.2853231399831846"
+  },
+  "months_to_dscr_danger": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "120.0"
+  },
+  "beneish_dsri": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "1.0000026165760785"
+  },
+  "beneish_gmi": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "0.9300271363683285"
+  },
+  "beneish_aqi": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "1.725001187805599"
+  },
+  "beneish_sgi": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "0.5489892051991012"
+  },
+  "beneish_depi": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "1.2839205146105728"
+  },
+  "beneish_sgai": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "2.141866884417233"
+  },
+  "beneish_lvgi": {
+    "dtype": "float64",
+    "non_null": 322,
+    "sample": "0.8884613721955885"
+  },
+  "beneish_tata": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "-0.05193965677436871"
+  },
+  "beneish_m_score": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "-2.7230256540472713"
+  },
+  "beneish_manipulation_flag": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "altman_x1": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "-0.012268635305832247"
+  },
+  "altman_x2": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.1942574795912386"
+  },
+  "altman_x3": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.03739777629676519"
+  },
+  "altman_x4": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.5737520054107546"
+  },
+  "altman_x5": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "0.6870256667101009"
+  },
+  "altman_z_score": {
+    "dtype": "float64",
+    "non_null": 352,
+    "sample": "1.411927640796614"
+  },
+  "altman_zone": {
+    "dtype": "category",
+    "non_null": 352,
+    "sample": "DANGER"
+  },
+  "piotroski_roa": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "1"
+  },
+  "piotroski_cfo": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "1"
+  },
+  "piotroski_roa_change": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "piotroski_accrual": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "1"
+  },
+  "piotroski_leverage": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "piotroski_liquidity": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "piotroski_shares": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "piotroski_margin": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "piotroski_turnover": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "0"
+  },
+  "piotroski_f_score": {
+    "dtype": "int64",
+    "non_null": 352,
+    "sample": "3"
+  }
+}

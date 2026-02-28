@@ -1,0 +1,36 @@
+# Environment
+.env
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Data (do not commit real data)
+data/raw/
+data/processed/
+*.csv
+*.xlsx
+*.pdf
+
+# Models (too large for git)
+models/
+*.pkl
+*.joblib
+*.pt
+*.pth
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log

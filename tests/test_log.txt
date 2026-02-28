@@ -1,0 +1,41 @@
+============================= test session starts =============================
+collecting ... collected 26 items
+
+tests/test_person1.py::TestDatasetGeneration::test_csv_exists PASSED     [  3%]
+tests/test_person1.py::TestDatasetGeneration::test_row_count PASSED      [  7%]
+tests/test_person1.py::TestDatasetGeneration::test_expected_columns PASSED [ 11%]
+tests/test_person1.py::TestDatasetGeneration::test_label_has_both_classes PASSED [ 15%]
+tests/test_person1.py::TestDatasetGeneration::test_no_fully_null_columns PASSED [ 19%]
+tests/test_person1.py::TestDatasetGeneration::test_company_count PASSED  [ 23%]
+tests/test_person1.py::TestBeneishValidation::test_satyam_exists PASSED  [ 26%]
+tests/test_person1.py::TestBeneishValidation::test_satyam_has_mscore PASSED [ 30%]
+tests/test_person1.py::TestBeneishValidation::test_satyam_flagged_near_default XFAIL [ 34%]
+tests/test_person1.py::TestAltmanZones::test_healthy_mostly_safe PASSED  [ 38%]
+tests/test_person1.py::TestAltmanZones::test_defaulted_mostly_danger_near_default PASSED [ 42%]
+tests/test_person1.py::TestCreditScorerOutputs::test_has_pd_score PASSED [ 46%]
+tests/test_person1.py::TestCreditScorerOutputs::test_pd_between_0_and_1 PASSED [ 50%]
+tests/test_person1.py::TestCreditScorerOutputs::test_has_credit_limit PASSED [ 53%]
+tests/test_person1.py::TestCreditScorerOutputs::test_credit_limit_positive_for_non_reject PASSED [ 57%]
+tests/test_person1.py::TestCreditScorerOutputs::test_has_risk_premium PASSED [ 61%]
+tests/test_person1.py::TestCreditScorerOutputs::test_risk_premium_in_range PASSED [ 65%]
+tests/test_person1.py::TestCreditScorerOutputs::test_has_lending_decision PASSED [ 69%]
+tests/test_person1.py::TestCreditScorerOutputs::test_has_top_features PASSED [ 73%]
+tests/test_person1.py::TestModelDisagreement::test_disagreement_flag_exists PASSED [ 76%]
+tests/test_person1.py::TestModelDisagreement::test_disagreement_value_nonnegative PASSED [ 80%]
+tests/test_person1.py::TestModelDisagreement::test_contradictory_row_triggers_uncertainty PASSED [ 84%]
+tests/test_person1.py::TestNoDataLeakage::test_temporal_split_is_clean PASSED [ 88%]
+tests/test_person1.py::TestNoDataLeakage::test_train_test_no_company_overlap_in_lstm PASSED [ 92%]
+tests/test_person1.py::TestTrajectoryModel::test_model_file_exists PASSED [ 96%]
+tests/test_person1.py::TestTrajectoryModel::test_trajectory_score_returns_valid_dict PASSED [100%]
+
+============================== warnings summary ===============================
+tests/test_person1.py::TestModelDisagreement::test_disagreement_flag_exists
+tests/test_person1.py::TestModelDisagreement::test_disagreement_value_nonnegative
+tests/test_person1.py::TestModelDisagreement::test_contradictory_row_triggers_uncertainty
+  C:\Users\panka\miniconda3\Lib\site-packages\sklearn\utils\validation.py:2691: UserWarning: X does not have valid feature names, but StandardScaler was fitted with feature names
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 25 passed, 1 xfailed, 3 warnings in 9.42s ==================
+
+STDERR:
