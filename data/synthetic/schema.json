@@ -1,11 +1,11 @@
 {
   "company_name": {
-    "dtype": "str",
+    "dtype": "object",
     "non_null": 352,
     "sample": "Alok Industries"
   },
   "sector": {
-    "dtype": "str",
+    "dtype": "object",
     "non_null": 352,
     "sample": "Textiles"
   },
@@ -320,7 +320,7 @@
     "sample": "80.21"
   },
   "satellite_activity_category": {
-    "dtype": "str",
+    "dtype": "object",
     "non_null": 352,
     "sample": "ACTIVE"
   },
