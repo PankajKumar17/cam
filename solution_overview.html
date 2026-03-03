@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yakṣarāja — Solution Overview</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0B0F19;
+            color: #E2E8F0;
+            line-height: 1.6;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(17, 25, 40, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 14px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            font-size: 2.4rem;
+            color: #00D4AA;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 1.6rem;
+            color: #6366F1;
+            margin-top: 30px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+        }
+
+        h3 {
+            font-size: 1.2rem;
+            color: #F59E0B;
+            margin-top: 20px;
+            margin-bottom: 8px;
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: #94A3B8;
+        }
+
+        ul {
+            margin-bottom: 16px;
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            color: #CBD5E1;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(0, 212, 170, 0.15);
+            color: #00D4AA;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        a {
+            color: #00D4AA;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div style="text-align:center; margin-bottom: 30px;">
+            <span class="badge">Team : Shadow Bytes</span>
+        </div>
+        <h1>Yakṣarāja: Solution Overview</h1>
+        <p style="text-align:center; font-size:1.2rem; color:#F1F5F9; font-style:italic;">
+            "Bridging the gap between raw financials and autonomous credit decisioning."
+        </p>
+
+        <h2>1. What is Yakṣarāja?</h2>
+        <p>
+            Yakṣarāja is an AI-Powered Credit Decisioning Engine designed to automate the end-to-end preparation of
+            Comprehensive Credit Appraisal Memorandums (CAMs). Designed to reduce processing time from 5–7 days to under
+            3 minutes, it ingests raw financial datasets and alternative data points, runs them through rigorous
+            statistical and agentic AI models, and synthesizes a production-ready DOCX report.
+        </p>
+
+        <h2>2. Key Objectives & Impact</h2>
+        <ul>
+            <li><strong>Latency Reduction:</strong> Eliminates manual data entry and evaluation overhead (>99.9%
+                faster).</li>
+            <li><strong>Bias Removal:</strong> Employs entirely data-driven logic and dialectic LLM agents (Bull/Bear
+                debate) to derive an objective credit sentiment.</li>
+            <li><strong>Enhanced Accuracy:</strong> Explores 146 generated features (velocity arrays, financial
+                forensical ratios) over large historical spans (FY2009–FY2024), detecting risks earlier than simple
+                baseline models.</li>
+        </ul>
+
+        <h2>3. How it Works: The 10-Layer Engine</h2>
+        <p>The system pipeline orchestrates multiple verification and scoring layers seamlessly:</p>
+        <ul>
+            <li><strong>Forensic Analysis:</strong> Evaluates earnings manipulation via Beneish M-Score and predictive
+                insolvency using Altman Z-Score and Piotroski F-Score.</li>
+            <li><strong>Credit Scoring:</strong> Uses a 3-model weighted ensemble (XGBoost, Random Forest, LightGBM)
+                balanced with SMOTE for minority representation.</li>
+            <li><strong>Alternative Data Verification:</strong>
+                <ul>
+                    <li><em>MCA Network Graphs:</em> Detects contagion across promoter links.</li>
+                    <li><em>Satellite Feeds:</em> Validates factory heatmaps and operational activity against disclosed
+                        capacities using Sentinel-2.</li>
+                    <li><em>GST Cross-Check:</em> Resolves invoice mismatches and tax divergence.</li>
+                </ul>
+            </li>
+            <li><strong>Stress Testing:</strong> Runs 1,000 Monte Carlo risk simulations simulating shocks (like RBI
+                Rate hikes, commodity inflation).</li>
+            <li><strong>Agentic Finalization:</strong> Orchestrates an LLM debate ending in an exhaustive Credit
+                Appraisal Memo formatted intelligently using <code>python-docx</code>.</li>
+        </ul>
+
+        <h2>4. The Breakthrough Innovations</h2>
+        <p>
+            We utilized multiple innovations outside ordinary bounds. The top 3 being:
+        </p>
+        <ol>
+            <li><strong style="color:#00D4AA;">Adversarial LLM Framework:</strong> Generative AI shouldn't just
+                summarize — it must debate. Our Bull and Bear agents challenge data iteratively until a unified
+                conclusion is securely established.</li>
+            <li><strong style="color:#00D4AA;">Promoter Contagion Networks:</strong> Bipartite graph modeling isolates
+                not just direct defaults, but hidden topological contagion.</li>
+            <li><strong style="color:#00D4AA;">Satellite Truth Interlocks:</strong> Bypassing document forgery
+                completely by comparing physical operational footprints generated externally.</li>
+        </ol>
+
+        <h2>5. Architecture & Stack</h2>
+        <p>
+            Running on Python 3.12, our system utilizes XGBoost and LightGBM for the core ensemble. LLM insights are
+            powered by Anthropic's Claude and LangGraph frameworks, with data transformations handled by Pandas,
+            Scikit-learn, and NetworkX.
+        </p>
+
+        <div style="margin-top:40px; text-align:center;">
+            <a href="presentation.html"
+                style="font-size:1.1rem; border: 1px solid #00D4AA; padding: 10px 20px; border-radius:8px;">← Return to
+                Presentation</a>
+        </div>
+    </div>
+
+</body>
+
+</html>

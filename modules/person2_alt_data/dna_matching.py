@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Corporate DNA Matching Module (Person 2)
+Yakṣarāja — Corporate DNA Matching Module (Person 2)
 ==========================================================
 Encodes financial fingerprints of India's major corporate collapses
 and checks if a borrower resembles any of them 12-24 months before

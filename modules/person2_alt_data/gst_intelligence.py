@@ -1,5 +1,5 @@
 """
-Intelli-Credit — GST Filing Intelligence Module (Person 2)
+Yakṣarāja — GST Filing Intelligence Module (Person 2)
 ===========================================================
 GST data is filed to the government — harder to fake than a P&L.
 We compare GST-declared revenue vs bank-declared revenue to detect

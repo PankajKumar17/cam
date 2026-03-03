@@ -1,5 +1,5 @@
 """
-Intelli-Credit - Core ML Credit Scoring Engine
+Yakṣarāja - Core ML Credit Scoring Engine
 ================================================
 Three-model ensemble (XGBoost + LightGBM + Random Forest) with
 SMOTE oversampling, temporal train/test split, SHAP explanations,
@@ -626,7 +626,7 @@ def train_and_evaluate() -> dict:
         All evaluation metrics.
     """
     print("=" * 60)
-    print("  Intelli-Credit -- Credit Scoring Engine")
+    print("  Yakṣarāja -- Credit Scoring Engine")
     print("=" * 60)
 
     # ---- 1. Load -----------------------------------------------------------

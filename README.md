@@ -1,4 +1,4 @@
-# 🏦 Intelli-Credit — AI-Powered Credit Decisioning Engine
+# 🏦 Yakṣarāja — AI-Powered Credit Decisioning Engine
 
 ### Vivriti Capital AI/ML Hackathon
 
@@ -10,7 +10,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                     INTELLI-CREDIT ENGINE                       │
+│                     YAKṢARĀJA ENGINE                       │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
@@ -126,8 +126,8 @@ cam/
 
 ```bash
 # Clone repo
-git clone https://github.com/PankajKumar17/intelli-credit.git
-cd intelli-credit
+git clone https://github.com/PankajKumar17/yaksaraja.git
+cd yaksaraja
 
 # Create virtual environment (recommended)
 python -m venv venv

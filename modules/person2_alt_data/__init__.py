@@ -1,6 +1,6 @@
 # Person 2 — Alternative Data module init
 """
-Intelli-Credit Alternative Data Intelligence
+Yakṣarāja Alternative Data Intelligence
 =============================================
 Modules:
   - network_graph : Promoter Network Graph & Contagion Risk Score

@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Streamlit Dashboard (Person 3 · P3-5)
+Yakṣarāja — Streamlit Dashboard (Person 3 · P3-5)
 ========================================================
 Professional hackathon demo dashboard with 4 pages:
   Page 1 — Upload & Process
@@ -21,6 +21,8 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -32,27 +34,50 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+from pipeline.main_pipeline import run_pipeline
+from pipeline.excel_parser import parse_screener_excel
+
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  BRAND PALETTE & CONSTANTS                                                ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-NAVY       = "#0A1F3C"
-DARK_BLUE  = "#143A6B"
-MEDIUM_BLUE = "#1E5AA8"
-LIGHT_BLUE = "#4A90D9"
-ORANGE     = "#E86C00"
-GREEN      = "#1B7A2B"
-RED        = "#C62828"
-AMBER      = "#E68A00"
-GREY       = "#757575"
-LIGHT_GREY = "#F0F2F6"
-WHITE      = "#FFFFFF"
+# ── Core palette ─────────────────────────────────────────────────────────
+BG_DARK    = "#0B0F19"
+BG_CARD    = "rgba(17, 25, 40, 0.75)"
+BG_CARD_SOLID = "#111928"
+SURFACE    = "rgba(255,255,255,0.04)"
+BORDER     = "rgba(255,255,255,0.08)"
+
+# Accent colours
+ACCENT     = "#00D4AA"        # Teal/cyan primary accent
+ACCENT_DIM = "rgba(0,212,170,0.15)"
+ACCENT2    = "#6366F1"        # Indigo secondary
+ACCENT2_DIM = "rgba(99,102,241,0.15)"
+BLUE       = "#3B82F6"
+ORANGE     = "#F59E0B"
+GREEN      = "#10B981"
+RED        = "#EF4444"
+AMBER      = "#F59E0B"
+
+# Text
+TX_PRIMARY = "#F1F5F9"
+TX_SECONDARY = "#94A3B8"
+TX_MUTED   = "#64748B"
+
+# Legacy aliases (used in helpers)
+NAVY       = "#0B0F19"
+DARK_BLUE  = "#1E293B"
+MEDIUM_BLUE = "#3B82F6"
+LIGHT_BLUE = "#60A5FA"
+GREY       = "#94A3B8"
+LIGHT_GREY = "#1E293B"
+WHITE      = "#F1F5F9"
 
 DECISION_COLORS = {
     "APPROVE": GREEN,
-    "CONDITIONAL_APPROVE": AMBER,
+    "CONDITIONAL_APPROVE": ORANGE,
     "REJECT": RED,
-    "REVIEW": GREY,
+    "REVIEW": TX_MUTED,
 }
 
 RISK_COLORS = {
@@ -66,126 +91,460 @@ RISK_COLORS = {
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  CUSTOM CSS                                                                ║
+# ║  PREMIUM CSS DESIGN SYSTEM                                                 ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
 CUSTOM_CSS = f"""
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-    /* Sidebar */
-    [data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, {NAVY} 0%, {DARK_BLUE} 100%);
-    }}
-    [data-testid="stSidebar"] * {{
-        color: {WHITE} !important;
-    }}
-    [data-testid="stSidebar"] .stRadio label {{
-        color: {WHITE} !important;
-        font-size: 15px;
+    /* ── Global resets ─────────────────────────────────────────── */
+    html, body, [data-testid="stAppViewContainer"],
+    [data-testid="stApp"], .main .block-container {{
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        color: {TX_PRIMARY} !important;
     }}
 
-    /* Metric cards */
+    [data-testid="stAppViewContainer"] {{
+        background: {BG_DARK};
+        background-image:
+            radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,212,170,0.08), transparent),
+            radial-gradient(ellipse 60% 40% at 80% 100%, rgba(99,102,241,0.06), transparent);
+    }}
+
+    .main .block-container {{
+        padding-top: 2rem;
+        max-width: 1200px;
+    }}
+
+    /* ── Sidebar ───────────────────────────────────────────────── */
+    [data-testid="stSidebar"] {{
+        background: linear-gradient(180deg, #0D1321 0%, #0B0F19 50%, #0F172A 100%);
+        border-right: 1px solid {BORDER};
+    }}
+    [data-testid="stSidebar"] * {{
+        color: {TX_PRIMARY} !important;
+    }}
+    [data-testid="stSidebar"] .stRadio label {{
+        font-size: 14px;
+        font-weight: 500;
+        padding: 4px 0;
+        transition: color 0.2s ease;
+    }}
+    [data-testid="stSidebar"] .stRadio label:hover {{
+        color: {ACCENT} !important;
+    }}
+
+    /* ── Typography inside elements ────────────────────────────── */
+    h1, h2, h3, h4, h5, h6 {{
+        font-family: 'Inter', sans-serif !important;
+        color: {TX_PRIMARY} !important;
+    }}
+    p, span, li, td, th, label, div {{
+        font-family: 'Inter', sans-serif !important;
+    }}
+    .stMarkdown p, .stMarkdown li {{
+        color: {TX_SECONDARY};
+    }}
+
+    /* ── Glassmorphism cards ────────────────────────────────────── */
+    .glass-card {{
+        background: {BG_CARD};
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid {BORDER};
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 16px;
+        transition: transform 0.2s ease, box-shadow 0.3s ease;
+    }}
+    .glass-card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(0,212,170,0.08);
+    }}
+
+    /* ── Metric cards (premium) ─────────────────────────────────── */
     .metric-card {{
-        background: {WHITE};
-        border-radius: 12px;
-        padding: 20px 24px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        border-left: 5px solid {NAVY};
-        margin-bottom: 12px;
+        background: {BG_CARD};
+        backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid {BORDER};
+        border-radius: 16px;
+        padding: 22px 26px;
+        margin-bottom: 14px;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    }}
+    .metric-card::before {{
+        content: '';
+        position: absolute; top: 0; left: 0;
+        width: 4px; height: 100%;
+        border-radius: 16px 0 0 16px;
+    }}
+    .metric-card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        border-color: rgba(255,255,255,0.12);
     }}
     .metric-card h3 {{
-        margin: 0 0 4px 0;
-        font-size: 13px;
-        color: {GREY};
+        margin: 0 0 6px 0;
+        font-size: 11px;
+        font-weight: 600;
+        color: {TX_MUTED};
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 1.2px;
     }}
     .metric-card .value {{
-        font-size: 28px;
+        font-size: 30px;
         font-weight: 700;
         margin: 0;
+        line-height: 1.2;
     }}
     .metric-card .sub {{
         font-size: 12px;
-        color: {GREY};
-        margin: 4px 0 0 0;
+        color: {TX_MUTED};
+        margin: 6px 0 0 0;
+        font-weight: 400;
     }}
 
-    /* Signal cards */
+    /* ── Signal cards (innovation row) ──────────────────────────── */
     .signal-card {{
-        background: {WHITE};
-        border-radius: 10px;
-        padding: 14px 16px;
-        box-shadow: 0 1px 6px rgba(0,0,0,0.06);
-        margin-bottom: 8px;
-        border-left: 4px solid {GREY};
+        background: {BG_CARD};
+        backdrop-filter: blur(12px);
+        border: 1px solid {BORDER};
+        border-radius: 14px;
+        padding: 16px 18px;
+        margin-bottom: 10px;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.25s ease;
     }}
-    .signal-card.green {{ border-left-color: {GREEN}; }}
-    .signal-card.amber {{ border-left-color: {AMBER}; }}
-    .signal-card.red {{ border-left-color: {RED}; }}
+    .signal-card::before {{
+        content: '';
+        position: absolute; top: 0; left: 0;
+        width: 3px; height: 100%;
+        border-radius: 14px 0 0 14px;
+        background: {TX_MUTED};
+    }}
+    .signal-card.green::before {{ background: {GREEN}; }}
+    .signal-card.amber::before {{ background: {AMBER}; }}
+    .signal-card.red::before   {{ background: {RED}; }}
+    .signal-card.green:hover {{ box-shadow: 0 0 20px rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); }}
+    .signal-card.amber:hover {{ box-shadow: 0 0 20px rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.3); }}
+    .signal-card.red:hover   {{ box-shadow: 0 0 20px rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); }}
+    .signal-card:hover {{
+        transform: translateY(-2px);
+    }}
     .signal-card h4 {{
-        margin: 0 0 4px 0;
-        font-size: 13px;
-        color: {DARK_BLUE};
+        margin: 0 0 6px 0;
+        font-size: 12px;
+        font-weight: 600;
+        color: {TX_SECONDARY};
+        letter-spacing: 0.3px;
     }}
     .signal-card p {{
         margin: 0;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
+        color: {TX_PRIMARY};
     }}
 
-    /* Section headers */
+    /* ── Section headers (gradient banner) ──────────────────────── */
     .section-header {{
-        background: linear-gradient(90deg, {NAVY}, {DARK_BLUE});
-        color: {WHITE};
-        padding: 10px 20px;
-        border-radius: 8px;
-        margin: 24px 0 16px 0;
-        font-size: 18px;
-        font-weight: 600;
+        background: linear-gradient(135deg, rgba(0,212,170,0.12) 0%, rgba(99,102,241,0.12) 100%);
+        border: 1px solid rgba(0,212,170,0.2);
+        color: {TX_PRIMARY};
+        padding: 14px 24px;
+        border-radius: 14px;
+        margin: 28px 0 20px 0;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+        backdrop-filter: blur(8px);
     }}
 
-    /* Bull/Bear columns */
+    /* ── Bull / Bear debate ─────────────────────────────────────── */
     .bull-header {{
-        background: {GREEN};
-        color: {WHITE};
-        padding: 10px 16px;
-        border-radius: 8px 8px 0 0;
-        font-size: 16px;
+        background: linear-gradient(135deg, {GREEN}, #059669);
+        color: white;
+        padding: 14px 20px;
+        border-radius: 14px 14px 0 0;
+        font-size: 15px;
         font-weight: 700;
         text-align: center;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
     }}
     .bear-header {{
-        background: {RED};
-        color: {WHITE};
-        padding: 10px 16px;
-        border-radius: 8px 8px 0 0;
-        font-size: 16px;
+        background: linear-gradient(135deg, {RED}, #DC2626);
+        color: white;
+        padding: 14px 20px;
+        border-radius: 14px 14px 0 0;
+        font-size: 15px;
         font-weight: 700;
         text-align: center;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
     }}
     .debate-box {{
-        background: {WHITE};
-        padding: 16px;
-        border-radius: 0 0 8px 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        background: {BG_CARD};
+        backdrop-filter: blur(12px);
+        border: 1px solid {BORDER};
+        padding: 20px;
+        border-radius: 0 0 14px 14px;
         min-height: 300px;
-        font-size: 14px;
-        line-height: 1.6;
+        font-size: 13.5px;
+        line-height: 1.7;
+        color: {TX_SECONDARY};
+    }}
+    .debate-box h2 {{
+        font-size: 15px !important;
+        color: {TX_PRIMARY} !important;
+        margin-top: 16px !important;
+        margin-bottom: 8px !important;
+        font-weight: 700 !important;
     }}
 
-    /* Download card */
+    /* ── Download card ──────────────────────────────────────────── */
     .download-card {{
-        background: {WHITE};
-        border-radius: 12px;
-        padding: 30px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        background: {BG_CARD};
+        backdrop-filter: blur(16px);
+        border: 1px solid {BORDER};
+        border-radius: 16px;
+        padding: 36px;
         text-align: center;
-        margin: 20px 0;
+        margin: 24px 0;
+        transition: box-shadow 0.3s ease;
+    }}
+    .download-card:hover {{
+        box-shadow: 0 8px 40px rgba(0,212,170,0.08);
     }}
 
-    /* Hide default streamlit hamburger & footer */
+    /* ── Streamlit overrides ────────────────────────────────────── */
     #MainMenu {{ visibility: hidden; }}
     footer {{ visibility: hidden; }}
+
+    /* Buttons */
+    .stButton > button {{
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        font-family: 'Inter', sans-serif !important;
+        letter-spacing: 0.3px;
+        transition: all 0.25s ease !important;
+        border: 1px solid {BORDER} !important;
+    }}
+    .stButton > button[kind="primary"] {{
+        background: linear-gradient(135deg, {ACCENT}, #059669) !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: 0 4px 14px rgba(0,212,170,0.25);
+    }}
+    .stButton > button[kind="primary"]:hover {{
+        box-shadow: 0 6px 20px rgba(0,212,170,0.35) !important;
+        transform: translateY(-1px);
+    }}
+    .stButton > button:not([kind="primary"]) {{
+        background: {BG_CARD} !important;
+        color: {TX_PRIMARY} !important;
+    }}
+    .stButton > button:not([kind="primary"]):hover {{
+        background: rgba(255,255,255,0.08) !important;
+        border-color: rgba(255,255,255,0.15) !important;
+    }}
+
+    /* Text inputs */
+    .stTextInput > div > div > input {{
+        background: rgba(255,255,255,0.04) !important;
+        color: {TX_PRIMARY} !important;
+        border: 1px solid {BORDER} !important;
+        border-radius: 12px !important;
+        font-family: 'Inter', sans-serif !important;
+        padding: 10px 14px !important;
+    }}
+    .stTextInput > div > div > input:focus {{
+        border-color: {ACCENT} !important;
+        box-shadow: 0 0 0 2px rgba(0,212,170,0.15) !important;
+    }}
+    .stTextInput label {{
+        color: {TX_SECONDARY} !important;
+        font-weight: 500 !important;
+    }}
+
+    /* File uploader */
+    [data-testid="stFileUploader"] {{
+        background: rgba(255,255,255,0.02) !important;
+        border: 2px dashed rgba(255,255,255,0.1) !important;
+        border-radius: 14px !important;
+        padding: 12px !important;
+    }}
+    [data-testid="stFileUploader"] label,
+    [data-testid="stFileUploader"] span,
+    [data-testid="stFileUploader"] p {{
+        color: {TX_SECONDARY} !important;
+    }}
+    [data-testid="stFileUploader"]:hover {{
+        border-color: rgba(0,212,170,0.3) !important;
+    }}
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {{
+        gap: 4px;
+        background: transparent;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        background: transparent !important;
+        color: {TX_MUTED} !important;
+        border-radius: 10px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 13px;
+        border: 1px solid transparent;
+        transition: all 0.2s ease;
+    }}
+    .stTabs [data-baseweb="tab"]:hover {{
+        color: {TX_PRIMARY} !important;
+        background: rgba(255,255,255,0.04) !important;
+    }}
+    .stTabs [aria-selected="true"] {{
+        color: {ACCENT} !important;
+        background: {ACCENT_DIM} !important;
+        border-color: rgba(0,212,170,0.2) !important;
+        font-weight: 600 !important;
+    }}
+    .stTabs [data-baseweb="tab-highlight"] {{
+        background-color: {ACCENT} !important;
+    }}
+
+    /* DataFrames / Tables */
+    .stDataFrame, [data-testid="stTable"] {{
+        border-radius: 12px;
+        overflow: hidden;
+    }}
+
+    /* Warnings & Info boxes */
+    .stAlert {{
+        border-radius: 12px !important;
+        backdrop-filter: blur(8px) !important;
+    }}
+
+    /* Progress bar */
+    .stProgress > div > div {{
+        background: linear-gradient(90deg, {ACCENT}, {ACCENT2}) !important;
+        border-radius: 4px;
+    }}
+
+    /* Selectbox / Radio */
+    .stRadio > div {{
+        gap: 2px;
+    }}
+
+    /* ── Animations ────────────────────────────────────────────── */
+    @keyframes fadeInUp {{
+        from {{ opacity: 0; transform: translateY(20px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
+    }}
+    @keyframes pulse-ring {{
+        0% {{ box-shadow: 0 0 0 0 rgba(0,212,170,0.3); }}
+        70% {{ box-shadow: 0 0 0 6px rgba(0,212,170,0); }}
+        100% {{ box-shadow: 0 0 0 0 rgba(0,212,170,0); }}
+    }}
+    @keyframes shimmer {{
+        0% {{ background-position: -200% 0; }}
+        100% {{ background-position: 200% 0; }}
+    }}
+
+    .animate-in {{
+        animation: fadeInUp 0.5s ease-out;
+    }}
+
+    /* ── Pipeline info panel ───────────────────────────────────── */
+    .pipeline-panel {{
+        background: linear-gradient(135deg, rgba(0,212,170,0.05), rgba(99,102,241,0.05));
+        border: 1px solid {BORDER};
+        border-radius: 16px;
+        padding: 24px;
+        margin-top: 20px;
+    }}
+    .pipeline-panel h4 {{
+        color: {ACCENT} !important;
+        margin-top: 0;
+        font-size: 16px;
+    }}
+    .pipeline-panel ol {{
+        color: {TX_SECONDARY};
+        font-size: 13px;
+        line-height: 2;
+    }}
+
+    /* ── Status badge ──────────────────────────────────────────── */
+    .status-badge {{
+        display: inline-block;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+    }}
+
+    /* ── Table in deep-dive ────────────────────────────────────── */
+    .ratio-table {{
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        border-radius: 12px;
+        overflow: hidden;
+        background: {BG_CARD};
+        border: 1px solid {BORDER};
+    }}
+    .ratio-table th {{
+        background: rgba(255,255,255,0.05);
+        padding: 12px 16px;
+        font-size: 12px;
+        font-weight: 600;
+        color: {TX_MUTED};
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        text-align: left;
+        border-bottom: 1px solid {BORDER};
+    }}
+    .ratio-table td {{
+        padding: 12px 16px;
+        font-size: 14px;
+        color: {TX_PRIMARY};
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }}
+    .ratio-table tr:last-child td {{
+        border-bottom: none;
+    }}
+    .ratio-table tr:hover td {{
+        background: rgba(255,255,255,0.02);
+    }}
+
+    /* ── Scorecard row ─────────────────────────────────────────── */
+    .scorecard {{
+        background: {BG_CARD};
+        border: 1px solid {BORDER};
+        border-radius: 14px;
+        padding: 18px 20px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.2s ease;
+    }}
+    .scorecard:hover {{
+        border-color: rgba(255,255,255,0.12);
+        transform: translateX(4px);
+    }}
+    .scorecard-label {{
+        font-size: 14px;
+        font-weight: 500;
+        color: {TX_SECONDARY};
+    }}
+    .scorecard-value {{
+        font-size: 16px;
+        font-weight: 700;
+    }}
 </style>
 """
 
@@ -259,24 +618,25 @@ def _signal_card(name: str, detail: str, level: str = "green"):
 
 
 def _gauge_chart(value: float, title: str, max_val: float = 1.0,
-                 suffix: str = "%", color: str = MEDIUM_BLUE) -> go.Figure:
-    """Create a compact gauge chart for PD scores."""
+                 suffix: str = "%", color: str = ACCENT) -> go.Figure:
+    """Create a compact gauge chart for PD scores — dark theme."""
     display_val = value * 100 if max_val <= 1.0 else value
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=display_val,
-        number={"suffix": suffix, "font": {"size": 22}},
-        title={"text": title, "font": {"size": 13}},
+        number={"suffix": suffix, "font": {"size": 24, "color": TX_PRIMARY}},
+        title={"text": title, "font": {"size": 12, "color": TX_SECONDARY}},
         gauge={
             "axis": {"range": [0, 100 if max_val <= 1.0 else max_val],
-                     "tickwidth": 1, "tickcolor": GREY},
+                     "tickwidth": 1, "tickcolor": TX_MUTED,
+                     "tickfont": {"color": TX_MUTED, "size": 10}},
             "bar": {"color": color, "thickness": 0.7},
-            "bgcolor": LIGHT_GREY,
+            "bgcolor": "rgba(255,255,255,0.04)",
             "borderwidth": 0,
             "steps": [
-                {"range": [0, 20], "color": "#E8F5E9"},
-                {"range": [20, 40], "color": "#FFF8E1"},
-                {"range": [40, 100], "color": "#FFEBEE"},
+                {"range": [0, 20], "color": "rgba(16,185,129,0.15)"},
+                {"range": [20, 40], "color": "rgba(245,158,11,0.15)"},
+                {"range": [40, 100], "color": "rgba(239,68,68,0.15)"},
             ],
             "threshold": {
                 "line": {"color": RED, "width": 3},
@@ -287,7 +647,7 @@ def _gauge_chart(value: float, title: str, max_val: float = 1.0,
     ))
     fig.update_layout(
         height=200, margin=dict(t=50, b=10, l=30, r=30),
-        paper_bgcolor="rgba(0,0,0,0)", font={"color": NAVY}
+        paper_bgcolor="rgba(0,0,0,0)", font={"color": TX_PRIMARY}
     )
     return fig
 
@@ -549,11 +909,145 @@ def _load_demo_data() -> dict:
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  PIPELINE OUTPUT → DASHBOARD ADAPTER                                       ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+def _adapt_pipeline_results(results: dict) -> dict:
+    """
+    Reshape run_pipeline() output to match what dashboard pages expect.
+    The pipeline returns flat keys; the dashboard expects nested dicts.
+    """
+    company_data = results.get("company_data", {})
+    ml_scores = results.get("ml_scores", {})
+    stress_raw = results.get("stress_test", {})
+    trajectory = results.get("trajectory", {})
+    network_raw = results.get("network", {})
+    dna_raw = results.get("dna_match", {})
+    ceo_raw = results.get("ceo_interview", {})
+
+    # ── Adapt ML scores (rename pd_xgb → xgb_pd for dashboard gauge charts)
+    ml_adapted = {
+        "ensemble_pd": ml_scores.get("ensemble_pd", 0.15),
+        "xgb_pd": ml_scores.get("pd_xgb", ml_scores.get("xgb_pd", 0.15)),
+        "rf_pd": ml_scores.get("pd_rf", ml_scores.get("rf_pd", 0.15)),
+        "lgb_pd": ml_scores.get("pd_lgb", ml_scores.get("lgb_pd", 0.15)),
+        "lending_decision": ml_scores.get("lending_decision", "REVIEW"),
+        "risk_premium": ml_scores.get("risk_premium", 4.0),
+        "credit_limit_cr": ml_scores.get("credit_limit_cr", 0),
+        "model_disagreement": abs(
+            ml_scores.get("pd_xgb", 0.15) - ml_scores.get("pd_rf", 0.15)
+        ),
+        "model_disagreement_flag": ml_scores.get("model_disagreement_flag", False),
+    }
+
+    # ── Adapt stress test (p10_dscr → dscr_p10, add dscr_simulated)
+    dscr_simulated = stress_raw.get("dscr_simulated", stress_raw.get("all_dscr", []))
+    named_scenarios_raw = stress_raw.get("named_scenarios", {})
+    if isinstance(named_scenarios_raw, dict):
+        scenarios = named_scenarios_raw.get("scenarios", [])
+    else:
+        scenarios = named_scenarios_raw if isinstance(named_scenarios_raw, list) else []
+
+    stress_adapted = {
+        "dscr_p10": stress_raw.get("p10_dscr", stress_raw.get("dscr_p10", 1.0)),
+        "dscr_p50": stress_raw.get("p50_dscr", stress_raw.get("dscr_p50", 1.5)),
+        "dscr_p90": stress_raw.get("p90_dscr", stress_raw.get("dscr_p90", 2.0)),
+        "covenant_breach_probability": stress_raw.get(
+            "default_probability_3yr",
+            stress_raw.get("covenant_breach_probability", 0.05)
+        ),
+        "dscr_simulated": dscr_simulated if dscr_simulated else
+            list(np.random.normal(
+                stress_raw.get("p50_dscr", 1.5), 0.25, 50
+            ).clip(0.5, 3.0)),
+        "named_scenarios": [
+            {
+                "name": sc.get("name", ""),
+                "dscr_impact": sc.get("dscr", sc.get("dscr_impact", 1.0)),
+                "pd_impact": sc.get("pd_impact", max(0, 1.0 - sc.get("dscr", 1.0))),
+            }
+            for sc in scenarios
+        ],
+    }
+
+    # ── Adapt trajectory (ensure dscr_history and fiscal_years exist)
+    traj_adapted = {
+        "dscr_trend": trajectory.get("warning_level", "STABLE"),
+        "months_to_danger": trajectory.get("estimated_months_to_distress", 999),
+        "dscr_3yr_slope": trajectory.get("dscr_velocity", 0.03),
+        "dscr_history": trajectory.get("dscr_trend",
+                          trajectory.get("dscr_history", [1.5, 1.5, 1.5, 1.5, 1.5])),
+        "fiscal_years": trajectory.get("fiscal_years",
+                          list(range(
+                              company_data.get("fiscal_year", 2024) - 4,
+                              company_data.get("fiscal_year", 2024) + 1
+                          ))),
+    }
+
+    # ── Adapt network (ensure network_nodes and network_edges exist)
+    nodes = network_raw.get("network_nodes", [])
+    edges = network_raw.get("network_edges", [])
+    if not nodes:
+        # Auto-generate from pipeline data
+        company_name = results.get("company_name", "Company")
+        nodes = [
+            {"id": company_name, "type": "target", "npa": False},
+        ]
+        # Add directors/promoters if available
+        for d in network_raw.get("directors", []):
+            name = d if isinstance(d, str) else d.get("name", "Unknown")
+            nodes.append({"id": name, "type": "promoter", "npa": False})
+        for c in network_raw.get("related_companies", []):
+            cname = c if isinstance(c, str) else c.get("company_name", "Unknown")
+            is_npa = c.get("is_npa", False) if isinstance(c, dict) else False
+            nodes.append({"id": cname, "type": "related", "npa": is_npa})
+        # Build edges
+        edges = []
+        for n in nodes[1:]:
+            edges.append({"from": n["id"], "to": company_name})
+
+    network_adapted = {
+        "contagion_risk_score": network_raw.get("contagion_risk_score", 0),
+        "network_nodes": nodes,
+        "network_edges": edges,
+    }
+
+    # ── Adapt DNA match
+    dna_adapted = {
+        "closest_default_archetype": dna_raw.get(
+            "closest_archetype", dna_raw.get("closest_default_archetype", "N/A")),
+        "max_archetype_similarity": dna_raw.get(
+            "max_similarity", dna_raw.get("max_archetype_similarity", 0)),
+    }
+
+    # ── Build final output dict matching _load_demo_data() structure
+    return {
+        "company_name": results.get("company_name", "Unknown"),
+        "fiscal_year": company_data.get("fiscal_year", 2024),
+        "sector": company_data.get("sector", "Industrial"),
+        "financial_data": company_data,
+        "ml_scores": ml_adapted,
+        "trajectory": traj_adapted,
+        "forensics": results.get("forensics", {}),
+        "network": network_adapted,
+        "stress_test": stress_adapted,
+        "satellite": results.get("satellite", {}),
+        "dna_match": dna_adapted,
+        "research": results.get("research", {}),
+        "ceo_interview": ceo_raw,
+        "bull_case": results.get("bull_case", "Not available"),
+        "bear_case": results.get("bear_case", "Not available"),
+        "recommendation": results.get("recommendation", {}),
+        "cam_path": results.get("cam_path"),
+    }
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  PAGE CONFIG & STATE                                                       ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
 st.set_page_config(
-    page_title="Intelli-Credit | AI Credit Decisioning",
+    page_title="Yakṣarāja | AI Credit Decisioning",
     page_icon="🏦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -577,14 +1071,34 @@ if "cam_path" not in st.session_state:
 with st.sidebar:
     st.markdown(
         f"""
-        <div style="text-align:center; padding: 20px 0 10px 0;">
-            <h1 style="color:{ORANGE}; margin:0; font-size:28px;">🏦 Intelli-Credit</h1>
-            <p style="color:{LIGHT_GREY}; font-size:12px; margin:4px 0 0 0;">
-                AI-Powered Credit Decisioning Engine
+        <div style="text-align:center; padding: 24px 0 14px 0;">
+            <h1 style="
+                color: {ACCENT};
+                margin: 0;
+                font-size: 24px;
+                font-weight: 800;
+                letter-spacing: -0.5px;
+                font-family: 'Inter', sans-serif;
+            ">🏦 Yakṣarāja</h1>
+            <p style="
+                color: {TX_SECONDARY};
+                font-size: 11px;
+                margin: 6px 0 0 0;
+                font-weight: 500;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+            ">
+                AI-Powered Credit Decisioning
             </p>
-            <p style="color:{GREY}; font-size:10px;">Vivriti Capital · Hackathon 2024</p>
+            <p style="color:{TX_MUTED}; font-size: 10px; margin: 2px 0 0 0;">
+                Vivriti Capital · Hackathon 2024
+            </p>
         </div>
-        <hr style="border-color: {DARK_BLUE};">
+        <div style="
+            height: 1px;
+            background: linear-gradient(90deg, transparent, {BORDER}, transparent);
+            margin: 8px 0 12px 0;
+        "></div>
         """,
         unsafe_allow_html=True,
     )
@@ -595,7 +1109,14 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    st.markdown("<hr style='border-color: #1E3A5C;'>", unsafe_allow_html=True)
+    st.markdown(
+        f"""<div style="
+            height: 1px;
+            background: linear-gradient(90deg, transparent, {BORDER}, transparent);
+            margin: 12px 0;
+        "></div>""",
+        unsafe_allow_html=True,
+    )
 
     # Status indicator
     if st.session_state.pipeline_done:
@@ -604,10 +1125,22 @@ with st.sidebar:
         color = _decision_color(decision)
         st.markdown(
             f"""
-            <div style="background: rgba(255,255,255,0.08); padding: 12px; border-radius: 8px;">
-                <p style="margin:0; font-size:11px; color:{GREY};">ACTIVE ANALYSIS</p>
-                <p style="margin:2px 0; font-size:15px; font-weight:700;">{company}</p>
-                <p style="margin:0; font-size:13px; color:{color}; font-weight:600;">● {decision}</p>
+            <div style="
+                background: rgba(255,255,255,0.03);
+                border: 1px solid {BORDER};
+                padding: 14px 16px;
+                border-radius: 12px;
+            ">
+                <p style="margin:0; font-size:10px; color:{TX_MUTED}; text-transform:uppercase; letter-spacing:1px; font-weight:600;">
+                    Active Analysis
+                </p>
+                <p style="margin:4px 0; font-size:15px; font-weight:700; color:{TX_PRIMARY};">
+                    {company}
+                </p>
+                <p style="margin:0; font-size:12px; font-weight:700; color:{color}; display:flex; align-items:center; gap:6px;">
+                    <span style="width:8px; height:8px; border-radius:50%; background:{color}; display:inline-block; animation: pulse-ring 2s infinite;"></span>
+                    {decision}
+                </p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -615,10 +1148,17 @@ with st.sidebar:
     else:
         st.markdown(
             f"""
-            <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px;">
-                <p style="margin:0; font-size:12px; color:{GREY};">No analysis loaded</p>
-                <p style="margin:4px 0 0 0; font-size:11px; color:{GREY};">
-                    Upload data or load demo
+            <div style="
+                background: rgba(255,255,255,0.02);
+                border: 1px dashed rgba(255,255,255,0.06);
+                padding: 14px 16px;
+                border-radius: 12px;
+            ">
+                <p style="margin:0; font-size:12px; color:{TX_MUTED}; font-weight:500;">
+                    No analysis loaded
+                </p>
+                <p style="margin:4px 0 0 0; font-size:11px; color:{TX_MUTED};">
+                    Upload data or load demo →
                 </p>
             </div>
             """,
@@ -628,9 +1168,9 @@ with st.sidebar:
     st.markdown(
         f"""
         <div style="position:fixed; bottom:20px; padding:0 16px;">
-            <p style="font-size:9px; color:{GREY}; margin:0;">
+            <p style="font-size:9px; color:{TX_MUTED}; margin:0; letter-spacing: 0.3px;">
                 11 Innovation Pipeline<br>
-                Built by Team Intelli-Credit
+                Built by Team Yakṣarāja
             </p>
         </div>
         """,
@@ -676,8 +1216,10 @@ def page_upload():
                 "🚀 RUN FULL ANALYSIS",
                 type="primary",
                 use_container_width=True,
-                disabled=not company_name,
+                disabled=not company_name or fin_file is None,
             )
+            if company_name and fin_file is None:
+                st.warning("⚠️ Please upload a financial statement file (Excel/CSV) to run the analysis.")
         with run_col2:
             demo_btn = st.button(
                 "⚡ Load Demo (Sunrise Textile)",
@@ -687,9 +1229,9 @@ def page_upload():
     with col2:
         st.markdown(
             f"""
-            <div style="background:{LIGHT_GREY}; padding:20px; border-radius:12px; margin-top:20px;">
-                <h4 style="color:{NAVY}; margin-top:0;">🔬 11-Innovation Pipeline</h4>
-                <ol style="font-size:13px; color:{DARK_BLUE}; padding-left:20px; line-height:2;">
+            <div class="pipeline-panel">
+                <h4>🔬 11-Innovation Pipeline</h4>
+                <ol>
                     <li>Financial Forensics (Beneish, Altman, Piotroski)</li>
                     <li>Temporal DSCR Trajectory</li>
                     <li>3-Model ML Ensemble (XGB/RF/LGB)</li>
@@ -720,53 +1262,65 @@ def page_upload():
 
     # ── Run pipeline ─────────────────────────────────────────────────────
     if run_btn and company_name:
-        progress = st.progress(0, text="Initializing pipeline...")
         status = st.empty()
+        progress = st.progress(0, text="Initializing pipeline...")
 
-        modules = [
-            ("Financial Forensics (Beneish / Altman / Piotroski)", 8),
-            ("Temporal DSCR Trajectory Model", 5),
-            ("ML Ensemble Scoring (XGBoost / RF / LightGBM)", 12),
-            ("Default DNA Matching", 5),
-            ("Promoter Network Graph Analysis", 6),
-            ("Satellite Activity Verification", 5),
-            ("GST Cross-Verification", 4),
-            ("Monte Carlo Stress Testing", 8),
-            ("Web Research Agent (LangGraph)", 10),
-            ("CEO Interview Sentiment Analysis", 8),
-            ("Adversarial Bull–Bear Debate", 10),
-        ]
+        try:
+            # Parse uploaded financial file (required)
+            status.markdown("📂 **Parsing uploaded financial file...**")
+            progress.progress(0.05, text="Parsing financial file...")
 
-        total_time = sum(t for _, t in modules)
-        elapsed = 0
+            # Save uploaded file to temp location
+            tmp_path = os.path.join(tempfile.gettempdir(), fin_file.name)
+            with open(tmp_path, "wb") as f:
+                f.write(fin_file.getbuffer())
 
-        for i, (mod_name, est_sec) in enumerate(modules):
-            pct = int((elapsed / total_time) * 100)
-            remaining = total_time - elapsed
-            progress.progress(
-                min(pct, 99) / 100,
-                text=f"[{i+1}/11] {mod_name}"
+            company_data_parsed = parse_screener_excel(tmp_path, company_name)
+            progress.progress(0.10, text="✅ File parsed, starting pipeline...")
+
+            # Run the real pipeline
+            status.markdown(f"🚀 **Running 11-innovation pipeline for {company_name}...**")
+            progress.progress(0.15, text="Running pipeline...")
+
+            output_dir = os.path.join(PROJECT_ROOT, "data", "processed")
+            os.makedirs(output_dir, exist_ok=True)
+
+            raw_results = run_pipeline(
+                company_name=company_name,
+                company_data=company_data_parsed,
+                output_dir=output_dir,
             )
-            status.markdown(
-                f"⏱️ Estimated time remaining: **~{remaining}s** | "
-                f"Running: **{mod_name}**"
-            )
-            # Simulate processing (replace with actual module calls)
-            time.sleep(0.4)
-            elapsed += est_sec
 
-        progress.progress(1.0, text="✅ Pipeline complete!")
-        status.empty()
+            progress.progress(0.95, text="Adapting results for dashboard...")
 
-        # Load demo data as fallback (in production, pipeline results replace this)
-        st.session_state.results = _load_demo_data()
-        st.session_state.results["company_name"] = company_name
-        st.session_state.pipeline_done = True
-        st.session_state.cam_path = None
+            # Adapt pipeline output to dashboard format
+            adapted = _adapt_pipeline_results(raw_results)
 
-        st.success(f"✅ Full analysis complete for **{company_name}**")
-        st.balloons()
-        st.info("Navigate to **📊 Credit Decision** to view results.")
+            # Store CAM path if generated
+            cam_path = raw_results.get("cam_path")
+            if cam_path and os.path.exists(str(cam_path)):
+                adapted["cam_path"] = cam_path
+                st.session_state.cam_path = cam_path
+            else:
+                st.session_state.cam_path = None
+
+            st.session_state.results = adapted
+            st.session_state.pipeline_done = True
+
+            progress.progress(1.0, text="✅ Pipeline complete!")
+            status.empty()
+
+            elapsed = raw_results.get("pipeline_elapsed_seconds", 0)
+            st.success(f"✅ Full analysis complete for **{company_name}** in {elapsed}s")
+            st.balloons()
+            st.info("Navigate to **📊 Credit Decision** to view results.")
+
+        except Exception as e:
+            progress.progress(1.0, text="❌ Pipeline failed")
+            status.empty()
+            st.error(f"❌ Pipeline error: {e}")
+            import traceback
+            st.code(traceback.format_exc(), language="text")
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -991,18 +1545,23 @@ def page_deep_dive():
                 _risk_level(_g(fin, "net_margin", default=0), 0.04, 0.01),
             ],
         }
-        df_ratios = pd.DataFrame(ratio_data)
-        st.dataframe(
-            df_ratios.style.apply(
-                lambda row: [
-                    "",
-                    "",
-                    f"background-color: {'#E8F5E9' if row['Assessment']=='GREEN' else '#FFEBEE' if row['Assessment']=='RED' else '#FFF8E1'}"
-                ],
-                axis=1,
-            ),
-            use_container_width=True,
-            hide_index=True,
+        # Build custom HTML table for dark theme
+        rows_html = ""
+        for i in range(len(ratio_data["Metric"])):
+            metric = ratio_data["Metric"][i]
+            val = ratio_data["Value"][i]
+            assess = ratio_data["Assessment"][i]
+            badge_color = GREEN if assess == "GREEN" else (RED if assess == "RED" else AMBER)
+            rows_html += f"""
+            <tr>
+                <td style="font-weight:500;">{metric}</td>
+                <td style="font-weight:600;">{val}</td>
+                <td><span class="status-badge" style="background:{badge_color}20; color:{badge_color};">{assess}</span></td>
+            </tr>"""
+
+        st.markdown(
+            f'<table class="ratio-table"><thead><tr><th>Metric</th><th>Value</th><th>Assessment</th></tr></thead><tbody>{rows_html}</tbody></table>',
+            unsafe_allow_html=True,
         )
 
         st.markdown("---")
@@ -1020,23 +1579,27 @@ def page_deep_dive():
             fig_dscr.add_trace(go.Scatter(
                 x=fy, y=dscr_hist,
                 mode="lines+markers", name="DSCR",
-                line=dict(color=MEDIUM_BLUE, width=3),
-                marker=dict(size=10, color=NAVY),
+                line=dict(color=ACCENT, width=3),
+                marker=dict(size=10, color=ACCENT2),
             ))
             # Danger threshold
             fig_dscr.add_hline(
                 y=1.0, line_dash="dash", line_color=RED,
                 annotation_text="Danger (1.0x)", annotation_position="bottom right",
+                annotation_font_color=TX_SECONDARY,
             )
             fig_dscr.add_hline(
                 y=1.5, line_dash="dot", line_color=AMBER,
                 annotation_text="Watch (1.5x)", annotation_position="top right",
+                annotation_font_color=TX_SECONDARY,
             )
             fig_dscr.update_layout(
                 height=350,
                 xaxis_title="Fiscal Year", yaxis_title="DSCR",
-                template="plotly_white",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(t=30, b=50, l=50, r=30),
+                font=dict(color=TX_SECONDARY),
             )
             st.plotly_chart(fig_dscr, use_container_width=True)
 
@@ -1066,14 +1629,16 @@ def page_deep_dive():
                         "value": -2.22,
                     },
                     "steps": [
-                        {"range": [-5, -2.22], "color": "#E8F5E9"},
-                        {"range": [-2.22, 0], "color": "#FFEBEE"},
+                        {"range": [-5, -2.22], "color": "rgba(16,185,129,0.15)"},
+                        {"range": [-2.22, 0], "color": "rgba(239,68,68,0.15)"},
                     ],
                 },
                 delta={"reference": -2.22, "decreasing": {"color": GREEN}, "increasing": {"color": RED}},
             ))
             fig_beneish.update_layout(
                 height=350, margin=dict(t=80, b=30, l=30, r=30),
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color=TX_PRIMARY),
             )
             st.plotly_chart(fig_beneish, use_container_width=True)
 
@@ -1134,8 +1699,8 @@ def page_deep_dive():
 
             # Node traces
             node_colors = {
-                "target": NAVY, "promoter": ORANGE,
-                "related": MEDIUM_BLUE, "peer": LIGHT_BLUE,
+                "target": ACCENT, "promoter": ORANGE,
+                "related": ACCENT2, "peer": LIGHT_BLUE,
             }
             for node in nodes:
                 x, y = pos[node["id"]]
@@ -1144,10 +1709,11 @@ def page_deep_dive():
                 fig_net.add_trace(go.Scatter(
                     x=[x], y=[y],
                     mode="markers+text",
-                    marker=dict(size=25 if ntype == "target" else 18, color=color),
+                    marker=dict(size=30 if ntype == "target" else 20, color=color,
+                                line=dict(width=2, color="rgba(255,255,255,0.2)")),
                     text=[node["id"]],
                     textposition="top center",
-                    textfont=dict(size=10),
+                    textfont=dict(size=11, color=TX_PRIMARY),
                     hovertext=f"{node['id']} ({ntype})",
                     hoverinfo="text",
                     showlegend=False,
@@ -1158,7 +1724,7 @@ def page_deep_dive():
                 showlegend=False,
                 xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                 yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                template="plotly_white",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(t=20, b=20, l=20, r=20),
             )
             st.plotly_chart(fig_net, use_container_width=True)
@@ -1191,25 +1757,29 @@ def page_deep_dive():
                 x=sim_data,
                 nbinsx=30,
                 name="Simulated DSCR",
-                marker_color=MEDIUM_BLUE,
+                marker_color=ACCENT2,
                 opacity=0.8,
             ))
             fig_hist.add_vline(
                 x=1.0, line_dash="dash", line_color=RED,
                 annotation_text="Covenant Breach (1.0x)",
+                annotation_font_color=TX_SECONDARY,
             )
             fig_hist.add_vline(
                 x=float(_g(stress, "dscr_p50", default=1.5)),
                 line_dash="dot", line_color=GREEN,
                 annotation_text=f"P50: {_fmt(_g(stress, 'dscr_p50'))}",
+                annotation_font_color=TX_SECONDARY,
             )
             fig_hist.update_layout(
                 height=400,
                 xaxis_title="Simulated DSCR",
                 yaxis_title="Frequency",
-                template="plotly_white",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 showlegend=False,
                 margin=dict(t=30, b=50),
+                font=dict(color=TX_SECONDARY),
             )
             st.plotly_chart(fig_hist, use_container_width=True)
 
@@ -1253,8 +1823,10 @@ def page_deep_dive():
             fig_sc.update_layout(
                 height=350,
                 xaxis_title="Scenario", yaxis_title="DSCR",
-                template="plotly_white",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(t=30, b=80),
+                font=dict(color=TX_SECONDARY),
             )
             st.plotly_chart(fig_sc, use_container_width=True)
 

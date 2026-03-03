@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Person 2 Module Tests
+Yakṣarāja — Person 2 Module Tests
 ========================================
 Covers all Person 2 (Alternative Data) modules:
   1. Network Graph     — build_promoter_network(), compute_contagion_score()

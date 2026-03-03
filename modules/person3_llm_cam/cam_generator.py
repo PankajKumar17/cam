@@ -1,5 +1,5 @@
 """
-Intelli-Credit — CAM Document Generator (Person 3)
+Yakṣarāja — CAM Document Generator (Person 3)
 =====================================================
 Assembles ALL outputs from Person 1 (ML Core) + Person 2 (Alt Data) +
 Person 3 (LLM Agents) into a professional Credit Appraisal Memo (CAM)
@@ -101,6 +101,89 @@ def _risk_color(level: str):
         return AMBER
     else:
         return GREEN
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  CONSISTENCY VALIDATION (Rules 4, 5, 6, 7)                                ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+def validate_cam_consistency(data: dict) -> list:
+    """
+    Validate CAM data for internal consistency before document assembly.
+    Returns a list of warning/error dicts: {"rule": str, "level": str, "message": str}.
+    Also mutates data to enforce mandatory corrections (e.g., DSCR < 1.0 → REJECT).
+    """
+    issues = []
+    fin = data.get("financial_data", {})
+    rec = data.get("recommendation", {})
+    ml = data.get("ml_scores", {})
+    ceo = data.get("ceo_interview", {})
+
+    dscr = fin.get("dscr", rec.get("dscr", ml.get("dscr")))
+    pd_val = ml.get("ensemble_pd", fin.get("ensemble_pd"))
+    decision = rec.get("lending_decision", ml.get("lending_decision", ""))
+    cfo = fin.get("cfo")
+
+    # Rule 4a: DSCR < 1.0 → must be REJECT
+    if dscr is not None and float(dscr) < 1.0 and decision != "REJECT":
+        issues.append({
+            "rule": "4a",
+            "level": "CRITICAL",
+            "message": f"DSCR {dscr:.2f}x < 1.0 but decision is {decision} — forcing REJECT",
+        })
+        if isinstance(rec, dict):
+            rec["lending_decision"] = "REJECT"
+            rec["recommended_limit_cr"] = 0.0
+
+    # Rule 4c: Negative gross margin + positive EBITDA margin = inconsistent
+    gross_margin = fin.get("gross_margin")
+    ebitda_margin = fin.get("ebitda_margin")
+    if gross_margin is not None and ebitda_margin is not None:
+        if float(gross_margin) < 0 and float(ebitda_margin) > 0:
+            issues.append({
+                "rule": "4c",
+                "level": "WARNING",
+                "message": f"Gross margin {gross_margin:.1%} is negative but EBITDA margin {ebitda_margin:.1%} is positive — check data",
+            })
+
+    # Rule 4e: PD > 40% → must be REJECT
+    if pd_val is not None and float(pd_val) > 0.40 and decision != "REJECT":
+        issues.append({
+            "rule": "4e",
+            "level": "CRITICAL",
+            "message": f"PD {pd_val:.2%} > 40% but decision is {decision} — forcing REJECT",
+        })
+        if isinstance(rec, dict):
+            rec["lending_decision"] = "REJECT"
+            rec["recommended_limit_cr"] = 0.0
+
+    # Rule 6: Strong positive CFO → no close default archetype
+    dna = data.get("dna_match", {})
+    if cfo is not None and float(cfo) > 0:
+        closest = dna.get("closest_default_archetype", "")
+        if closest and closest not in ("None (Healthy)", "N/A", ""):
+            issues.append({
+                "rule": "6",
+                "level": "WARNING",
+                "message": f"CFO is positive (₹{cfo:.1f} Cr) but default archetype is '{closest}' — overriding to 'None (Healthy)'",
+            })
+            dna["closest_default_archetype"] = "None (Healthy)"
+
+    # Rule 7: Promoter holding should not be a suspicious default
+    promoter_pct = fin.get("promoter_holding_pct")
+    if promoter_pct is None:
+        issues.append({
+            "rule": "7",
+            "level": "INFO",
+            "message": "Promoter holding percentage not provided — will show as N/A",
+        })
+
+    # Log all issues
+    for issue in issues:
+        log_fn = logger.error if issue["level"] == "CRITICAL" else logger.warning
+        log_fn(f"CAM Validation [{issue['rule']}]: {issue['message']}")
+
+    return issues
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -684,11 +767,25 @@ def generate_stress_test_section(doc, data: dict):
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
 def generate_management_section(doc, data: dict):
-    """CEO interview insights and management quality score."""
+    """CEO interview insights and management quality score.
+    Rule 5: Only show detailed scores if transcript was provided."""
     _add_styled_heading(doc, "8. Management Quality Assessment", level=1)
 
     ceo = _g(data, "ceo_interview", default={})
     scores = _g(ceo, "key_scores", default={})
+    used_fallback = _g(ceo, "used_fallback", default=True)
+
+    # Rule 5: Gate on transcript availability
+    if used_fallback:
+        _add_para(doc, "Management Quality Assessment: INSUFFICIENT DATA",
+                  size=12, bold=True, color=AMBER)
+        _add_para(doc, "No earnings call transcript or interview audio was provided. "
+                  "Management quality scores shown below are proxy estimates "
+                  "derived from financial data and should not be relied upon for "
+                  "the credit decision. Schedule management interaction before "
+                  "final approval.",
+                  size=10, italic=True, color=GREY)
+        doc.add_paragraph("")
 
     _add_para(doc, "Assessment based on structured CEO/promoter interview analysis — scoring "
               "consistency between financial data and management narrative.",
@@ -725,11 +822,6 @@ def generate_management_section(doc, data: dict):
             if isinstance(flag, dict):
                 _add_para(doc, f"  🚩 [{_g(flag, 'severity')}] {_g(flag, 'description')}",
                           size=9, color=RED)
-
-    if _g(ceo, "used_fallback", default=False):
-        doc.add_paragraph("")
-        _add_para(doc, "Note: No interview audio was provided. Scores are proxy estimates "
-                  "derived from financial data.", size=9, italic=True, color=GREY)
 
     _add_page_break(doc)
 
@@ -899,7 +991,7 @@ def _add_header_footer(doc, company_name: str):
         footer = section.footer
         footer_para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
         footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = footer_para.add_run("Intelli-Credit | Vivriti Capital | Page ")
+        run = footer_para.add_run("Yakṣarāja | Vivriti Capital | Page ")
         run.font.size = Pt(7)
         run.font.color.rgb = GREY
         # Page number field
@@ -1003,6 +1095,12 @@ def generate_cam(
     fin_data = all_data.get("financial_data", {})
     if hasattr(fin_data, "to_dict"):
         all_data["financial_data"] = fin_data.to_dict()
+
+    # ── Run consistency validation (Rules 4, 5, 6, 7) ────────────────────
+    logger.info("Running CAM consistency validation...")
+    validation_issues = validate_cam_consistency(all_data)
+    if validation_issues:
+        logger.warning(f"CAM validation found {len(validation_issues)} issue(s)")
 
     logger.info("Generating Section 1: Cover Page")
     generate_cover_page(doc, all_data)

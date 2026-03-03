@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Person 3 Module Tests
+Yakṣarāja — Person 3 Module Tests
 ========================================
 Covers all Person 3 (LLM + CAM) modules:
   1. Research Agent       — run_research()
@@ -770,6 +770,170 @@ class TestAdversarialPipelineIntegration:
             assert isinstance(rec["recommended_limit_cr"], (int, float))
             assert isinstance(rec["recommended_rate_pct"], (int, float))
             assert len(rec["key_conditions"]) >= 1
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  TEST — CORRECTED CAM RULES (Rules 1-7)                                   ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+class TestCorrectedRules:
+    """Verify the corrected system prompt rules are enforced in code."""
+
+    def test_dscr_below_1_forces_reject(self):
+        """Rule 4a: DSCR < 1.0 → coordinator MUST return REJECT with limit=0."""
+        scores_dscr_below_1 = {
+            "ensemble_pd": 0.15,
+            "dscr": 0.9,
+            "lending_decision": "CONDITIONAL_APPROVE",
+            "risk_premium": 3.5,
+            "revenue": 850.0,
+        }
+
+        with patch(
+            "modules.person3_llm_cam.dissent_agent.ANTHROPIC_AVAILABLE", False
+        ):
+            from modules.person3_llm_cam.dissent_agent import synthesize_cam_recommendation
+            result = synthesize_cam_recommendation("bull", "bear", scores_dscr_below_1)
+
+        assert result["lending_decision"] == "REJECT", \
+            f"Expected REJECT for DSCR=0.9, got {result['lending_decision']}"
+        assert result["recommended_limit_cr"] == 0.0, \
+            f"Expected limit=0 for REJECT, got {result['recommended_limit_cr']}"
+
+    def test_pd_above_40_forces_reject(self):
+        """Rule 4e: PD > 0.40 → coordinator MUST return REJECT."""
+        scores_high_pd = {
+            "ensemble_pd": 0.45,
+            "dscr": 1.5,
+            "lending_decision": "CONDITIONAL_APPROVE",
+            "risk_premium": 5.0,
+            "revenue": 500.0,
+        }
+
+        with patch(
+            "modules.person3_llm_cam.dissent_agent.ANTHROPIC_AVAILABLE", False
+        ):
+            from modules.person3_llm_cam.dissent_agent import synthesize_cam_recommendation
+            result = synthesize_cam_recommendation("bull", "bear", scores_high_pd)
+
+        assert result["lending_decision"] == "REJECT", \
+            f"Expected REJECT for PD=45%, got {result['lending_decision']}"
+        assert result["recommended_limit_cr"] == 0.0, \
+            f"Expected limit=0 for REJECT, got {result['recommended_limit_cr']}"
+
+    def test_missing_data_shows_data_required(self):
+        """Rule 1: Missing financial figures → [DATA REQUIRED] in bull case."""
+        from modules.person3_llm_cam.approval_agent import _display_val, _display_pct, _display_ratio
+
+        assert _display_val(None) == "[DATA REQUIRED]"
+        assert _display_val(0.0) == "[DATA REQUIRED]"
+        assert _display_pct(None) == "[DATA REQUIRED]"
+        assert _display_ratio(None) == "[DATA REQUIRED]"
+
+        # Valid values should NOT show [DATA REQUIRED]
+        assert "[DATA REQUIRED]" not in _display_val(850.0)
+        assert "[DATA REQUIRED]" not in _display_pct(0.15)
+        assert "[DATA REQUIRED]" not in _display_ratio(1.85)
+
+    def test_sector_appropriate_stress_in_bear_case(self):
+        """Rule 3: Bear case stress scenarios must match company sector."""
+        steel_company = {
+            "company_name": "Tata Steel",
+            "sector": "Steel",
+            "fiscal_year": "FY2024",
+            "revenue": 2000.0, "ebitda": 400.0, "ebitda_margin": 0.20,
+            "pat": 200.0, "net_margin": 0.10,
+            "dscr": 1.8, "interest_coverage": 3.0,
+            "debt_to_equity": 1.2, "current_ratio": 1.3,
+            "roe": 0.15, "roa": 0.08,
+            "cfo": 350.0, "free_cash_flow": 150.0,
+            "total_debt": 800.0, "total_equity": 667.0,
+            "beneish_m_score": -2.8, "altman_z_score": 2.5,
+            "piotroski_f_score": 7, "auditor_distress_score": 0,
+            "going_concern_flag": 0, "qualified_opinion_flag": 0,
+            "related_party_tx_to_rev": 0.03,
+            "ensemble_pd": 0.10, "model_disagreement_flag": "CONSENSUS",
+            "risk_premium": 3.0,
+            "satellite_activity_score": 90.0,
+            "satellite_activity_category": "ACTIVE",
+            "satellite_vs_revenue_flag": 0,
+            "gst_vs_bank_divergence": 0.02, "gst_divergence_flag": 0,
+            "gst_filing_delays_count": 0, "gst_payment_delay_days": 5,
+            "contagion_risk_score": 0.10,
+            "promoter_pledge_pct": 0.05,
+            "promoter_npa_companies": 0, "din_disqualified_count": 0,
+            "ceo_deflection_score": 0.15,
+            "ceo_overconfidence_score": 0.20,
+            "ceo_specificity_score": 0.60,
+            "ceo_sentiment_revenue": 0.65,
+            "ceo_sentiment_debt": 0.25,
+        }
+        steel_research = {
+            "key_risks_found": ["Iron ore price volatility"],
+            "key_positives_found": ["Infrastructure demand growth"],
+            "industry_outlook": "POSITIVE",
+            "research_sentiment_score": 0.70,
+        }
+
+        with patch(
+            "modules.person3_llm_cam.dissent_agent.ANTHROPIC_AVAILABLE", False
+        ):
+            from modules.person3_llm_cam.dissent_agent import write_bear_case
+            bear = write_bear_case(steel_company, "Bull case text", steel_research)
+
+        # Steel company bear case should mention steel-specific stresses
+        bear_lower = bear.lower()
+        steel_keywords = ["iron ore", "coking coal", "cbam", "steel", "china"]
+        mentions_steel = any(kw in bear_lower for kw in steel_keywords)
+        assert mentions_steel, \
+            f"Steel company bear case should mention steel-specific stresses, but didn't. Got:\n{bear[:500]}"
+
+        # Should NOT mention cotton/textile stresses
+        assert "cotton" not in bear_lower, \
+            "Steel company bear case should NOT mention cotton"
+
+    def test_cam_validation_forces_reject_on_dscr(self):
+        """Rule 4a: validate_cam_consistency forces REJECT when DSCR < 1.0."""
+        from modules.person3_llm_cam.cam_generator import validate_cam_consistency
+
+        data = {
+            "financial_data": {"dscr": 0.8, "cfo": -10.0},
+            "ml_scores": {"ensemble_pd": 0.15},
+            "recommendation": {
+                "lending_decision": "CONDITIONAL_APPROVE",
+                "recommended_limit_cr": 100.0,
+            },
+            "ceo_interview": {},
+        }
+
+        issues = validate_cam_consistency(data)
+        assert any(i["rule"] == "4a" for i in issues), \
+            "Should flag DSCR < 1.0 as rule 4a violation"
+        assert data["recommendation"]["lending_decision"] == "REJECT", \
+            "Should force REJECT when DSCR < 1.0"
+        assert data["recommendation"]["recommended_limit_cr"] == 0.0, \
+            "Should force limit to 0 when REJECT"
+
+    def test_cam_validation_overrides_archetype_for_positive_cfo(self):
+        """Rule 6: Positive CFO → override default archetype to 'None (Healthy)'."""
+        from modules.person3_llm_cam.cam_generator import validate_cam_consistency
+
+        data = {
+            "financial_data": {"dscr": 2.0, "cfo": 100.0},
+            "ml_scores": {"ensemble_pd": 0.10},
+            "recommendation": {"lending_decision": "APPROVE"},
+            "dna_match": {
+                "closest_default_archetype": "Leveraged Buyout Failure",
+                "max_archetype_similarity": 0.30,
+            },
+            "ceo_interview": {},
+        }
+
+        issues = validate_cam_consistency(data)
+        assert any(i["rule"] == "6" for i in issues), \
+            "Should flag mismatched archetype for positive CFO"
+        assert data["dna_match"]["closest_default_archetype"] == "None (Healthy)", \
+            "Should override archetype to 'None (Healthy)' for positive CFO"
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗

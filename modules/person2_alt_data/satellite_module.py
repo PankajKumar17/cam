@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Satellite Activity Scoring Module (Person 2)
+Yakṣarāja — Satellite Activity Scoring Module (Person 2)
 ==============================================================
 Verifies that a factory is *actually running* — not just on paper —
 by analysing Sentinel-2 (ESA) free satellite imagery.

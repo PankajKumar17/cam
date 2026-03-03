@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Research Agent (Person 3, Innovation 9)
+Yakṣarāja — Research Agent (Person 3, Innovation 9)
 =========================================================
 LangGraph-based web research agent that performs secondary research
 on borrower companies and their industries before CAM generation.
@@ -649,7 +649,7 @@ def _format_output(state: Dict[str, Any]) -> Dict[str, Any]:
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("INTELLI-CREDIT — Research Agent (Standalone Test)")
+    print("YAKṢARĀJA — Research Agent (Standalone Test)")
     print("=" * 60)
 
     result = run_research(

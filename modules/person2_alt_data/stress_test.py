@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Monte Carlo Stress Testing Engine (Person 2)
+Yakṣarāja — Monte Carlo Stress Testing Engine (Person 2)
 ==============================================================
 Outputs a PROBABILITY DISTRIBUTION of DSCR outcomes across 1000 macro
 scenarios instead of a binary approve / reject. This is how real credit

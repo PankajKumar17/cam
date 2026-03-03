@@ -1,6 +1,6 @@
 #!/bin/bash
 # ══════════════════════════════════════════════════════════════════
-# Intelli-Credit — GitHub Final Submission Script
+# Yakṣarāja — GitHub Final Submission Script
 # Vivriti Capital AI/ML Hackathon
 # ══════════════════════════════════════════════════════════════════
 #
@@ -17,10 +17,10 @@
 
 set -e  # Exit on any error
 
-REPO_URL="https://github.com/PankajKumar17/intelli-credit.git"
+REPO_URL="https://github.com/PankajKumar17/yaksaraja.git"
 BRANCH="main"
 
-echo "🏦 Intelli-Credit — Final Submission Setup"
+echo "🏦 Yakṣarāja — Final Submission Setup"
 echo "═══════════════════════════════════════════"
 echo ""
 
@@ -157,7 +157,7 @@ fi
 # ── Step 9: Tag the release ──────────────────────────────────
 echo ""
 echo "🏷️  Tagging release..."
-git tag -a v1.0-hackathon -m "Intelli-Credit v1.0 — Vivriti Capital Hackathon Submission
+git tag -a v1.0-hackathon -m "Yakṣarāja v1.0 — Vivriti Capital Hackathon Submission
 
 11 Innovations Implemented:
 1. Beneish M-Score Forensics

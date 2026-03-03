@@ -1,5 +1,5 @@
 """
-Intelli-Credit — CEO Interview Sentiment Analysis (Person 3, Innovation 11)
+Yakṣarāja — CEO Interview Sentiment Analysis (Person 3, Innovation 11)
 =============================================================================
 Analyzes CEO/promoter interview recordings for linguistic deception markers,
 sentiment trajectory, and topic-specific confidence.

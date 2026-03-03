@@ -1,5 +1,5 @@
 """
-Intelli-Credit -- Person 1 Test Suite
+Yakṣarāja -- Person 1 Test Suite
 ======================================
 Tests for: data_generator, feature_engineering, credit_scorer, temporal_model.
 

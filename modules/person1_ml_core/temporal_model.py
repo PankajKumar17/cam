@@ -1,5 +1,5 @@
 """
-Intelli-Credit - Temporal Trajectory Model (LSTM)
+Yakṣarāja - Temporal Trajectory Model (LSTM)
 ===================================================
 Predicts default probability from 5-year financial trajectories.
 A company with DSCR falling consistently is far riskier than
@@ -242,7 +242,7 @@ def train_lstm(df: pd.DataFrame = None) -> dict:
         df = pd.read_csv(FEATURE_MATRIX_PATH)
 
     print("=" * 60)
-    print("  Intelli-Credit -- LSTM Trajectory Model")
+    print("  Yakṣarāja -- LSTM Trajectory Model")
     print("=" * 60)
 
     # ---- Build sequences ---------------------------------------------------

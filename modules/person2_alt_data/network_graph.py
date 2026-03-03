@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Promoter Network Graph & Contagion Risk (Person 2)
+Yakṣarāja — Promoter Network Graph & Contagion Risk (Person 2)
 =====================================================================
 Builds a Knowledge Graph of promoter-company relationships from MCA21
 director-company linkage data. Computes a Network Contagion Risk Score

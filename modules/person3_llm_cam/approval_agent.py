@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Approval Agent (Person 3, Innovation 10)
+Yakṣarāja — Approval Agent (Person 3, Innovation 10)
 ==========================================================
 The "Bull Case" agent in the adversarial two-agent CAM system.
 
@@ -34,11 +34,39 @@ except ImportError:
 # ║  CONSTANTS                                                                ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-APPROVAL_SYSTEM_PROMPT = """You are a senior credit analyst at Vivriti Capital. Your job is to \
-write the strongest possible case FOR approving this loan application. \
-Use all available data — financial ratios, industry research, management \
-quality, collateral — to build a compelling bull case for lending. \
-Be specific with numbers. Reference actual data points.
+APPROVAL_SYSTEM_PROMPT = """You are a Senior Credit Analyst at Vivriti Capital generating a Credit Appraisal Memorandum.
+
+Your job is to write the strongest possible case FOR approving this loan application.
+Use all available data — financial ratios, industry research, management quality, collateral — 
+to build a compelling bull case for lending. Be specific with numbers. Reference actual data points.
+
+=== MANDATORY RULES ===
+
+RULE 1 — FINANCIAL DATA: Use ONLY the figures provided in the [FINANCIAL DATA] section.
+Never invent, estimate, or use placeholder financials. If a figure is missing, write "[DATA REQUIRED]".
+Never confuse quarterly figures with annual figures. Specify STANDALONE vs. CONSOLIDATED.
+
+RULE 2 — COMPANY IDENTITY: The sector and all narrative content must match the actual company.
+Never write about a fictional or substitute company. The bull case must reference the subject
+company's actual sector, products, and competitive environment.
+
+RULE 3 — SECTOR-APPROPRIATE ANALYSIS: Use stress scenarios and tailwinds specific to the company's sector.
+Never apply textile/agricultural commodity stresses to steel or wind energy companies, or vice versa.
+
+RULE 4 — INTERNAL CONSISTENCY:
+(a) DSCR < 1.0 → decision = REJECT. Do NOT build a bull case that ignores this.
+(b) Gross margin and EBITDA margin must be arithmetically consistent.
+(c) A Bear metric (e.g. DSCR 0.47) cannot be cited as a Bull strength.
+(d) PD > 40% → recommend REJECT.
+
+RULE 5 — MANAGEMENT QUALITY: Only discuss management quality if an earnings call transcript or
+interview is provided. If not provided, write: "Management Quality Assessment: INSUFFICIENT DATA —
+No transcript provided."
+
+RULE 6 — DEFAULT ARCHETYPE: For companies with strong positive operating cash flows, write:
+"No close default archetype." Never assign an unrelated industry's default archetype.
+
+RULE 7 — PROMOTER SHAREHOLDING: Use only figures from actual data. Never default to 50% or 62%.
 
 You write in a formal but confident tone appropriate for an Indian NBFC credit committee memo.
 Always structure your analysis with clear headers and bullet points.
@@ -52,20 +80,20 @@ Company: {company_name}
 Sector: {sector}
 Fiscal Year: {fiscal_year}
 
-## KEY FINANCIAL METRICS
-- Revenue: ₹{revenue:.1f} Cr
-- EBITDA: ₹{ebitda:.1f} Cr (Margin: {ebitda_margin:.1%})
-- PAT: ₹{pat:.1f} Cr (Net Margin: {net_margin:.1%})
-- DSCR: {dscr:.2f}x
-- Interest Coverage Ratio: {interest_coverage:.2f}x
-- Debt-to-Equity: {debt_to_equity:.2f}x
-- Current Ratio: {current_ratio:.2f}x
-- ROE: {roe:.1%}
-- ROA: {roa:.1%}
-- Cash Flow from Operations: ₹{cfo:.1f} Cr
-- Free Cash Flow: ₹{free_cash_flow:.1f} Cr
-- Total Debt: ₹{total_debt:.1f} Cr
-- Total Equity: ₹{total_equity:.1f} Cr
+## [FINANCIAL DATA]
+- Revenue (Annual): {revenue_display}
+- EBITDA: {ebitda_display} (Margin: {ebitda_margin_display})
+- PAT: {pat_display} (Net Margin: {net_margin_display})
+- DSCR: {dscr_display}
+- Interest Coverage Ratio: {interest_coverage_display}
+- Debt-to-Equity: {debt_to_equity_display}
+- Current Ratio: {current_ratio_display}
+- ROE: {roe_display}
+- ROA: {roa_display}
+- Cash Flow from Operations: {cfo_display}
+- Free Cash Flow: {free_cash_flow_display}
+- Total Debt: {total_debt_display}
+- Total Equity: {total_equity_display}
 
 ## ML CREDIT SCORES
 - Ensemble PD (Probability of Default): {ensemble_pd:.2%}
@@ -78,12 +106,10 @@ Fiscal Year: {fiscal_year}
 - Satellite Activity Score: {satellite_activity_score:.1f} ({satellite_activity_category})
 - GST Compliance: Divergence={gst_vs_bank_divergence:.1%}, Filing Delays={gst_filing_delays_count}
 - Network Contagion Risk: {contagion_risk_score:.2f}
-- Promoter Holding: {promoter_holding_pct:.1%} (Pledged: {promoter_pledge_pct:.1%})
+- Promoter Holding: {promoter_holding_pct_display} (Pledged: {promoter_pledge_pct_display})
 
-## CEO INTERVIEW SIGNALS
-- Overall Sentiment: {ceo_sentiment_overall:.2f}
-- Specificity Score: {ceo_specificity_score:.2f}
-- Deflection Score: {ceo_deflection_score:.2f}
+## MANAGEMENT TRANSCRIPT
+{management_transcript_status}
 
 ## RESEARCH INTELLIGENCE
 Industry Outlook: {industry_outlook}
@@ -94,12 +120,18 @@ Key Positives from Research:
 
 ---
 
+IMPORTANT REMINDERS:
+- If any financial figure above shows [DATA REQUIRED], do NOT invent a value.
+- Stress scenarios and tailwinds must be specific to the {sector} sector.
+- If MANAGEMENT TRANSCRIPT says NOT PROVIDED, write: "Management Quality Assessment: INSUFFICIENT DATA"
+- If DSCR < 1.0 or PD > 40%, do NOT build an approval case — acknowledge the weakness.
+
 WRITE THE BULL CASE WITH THESE EXACT SECTIONS:
 
 1. **EXECUTIVE SUMMARY** — 3-4 sentences positively framing the lending opportunity
 2. **FINANCIAL STRENGTHS** — Top 3-5 strongest ratios/metrics with exact numbers
 3. **BUSINESS MOMENTUM** — Growth signals, revenue trajectory, market position
-4. **MANAGEMENT QUALITY** — Positive signals from CEO interview, promoter track record
+4. **MANAGEMENT QUALITY** — Positive signals from CEO interview, promoter track record (ONLY if transcript provided)
 5. **INDUSTRY TAILWINDS** — Sector-level positives, policy support, demand outlook
 6. **RISK MITIGANTS** — Why the identified risks are manageable
 
@@ -119,52 +151,87 @@ def _safe_get(data: dict, key: str, default: Any = 0.0) -> Any:
     return val
 
 
+def _display_val(value, fmt=".1f", prefix="₹", suffix=" Cr"):
+    """Format a financial value for display, or return [DATA REQUIRED] if missing."""
+    if value is None or value == 0.0:
+        return "[DATA REQUIRED]"
+    try:
+        return f"{prefix}{float(value):{fmt}}{suffix}"
+    except (ValueError, TypeError):
+        return "[DATA REQUIRED]"
+
+
+def _display_pct(value):
+    """Format a percentage value for display, or return [DATA REQUIRED] if missing."""
+    if value is None or value == 0.0:
+        return "[DATA REQUIRED]"
+    try:
+        return f"{float(value):.1%}"
+    except (ValueError, TypeError):
+        return "[DATA REQUIRED]"
+
+
+def _display_ratio(value, suffix="x"):
+    """Format a ratio value for display, or return [DATA REQUIRED] if missing."""
+    if value is None or value == 0.0:
+        return "[DATA REQUIRED]"
+    try:
+        return f"{float(value):.2f}{suffix}"
+    except (ValueError, TypeError):
+        return "[DATA REQUIRED]"
+
+
 def _build_prompt_context(company_data: dict, research: dict) -> dict:
     """
     Build the template context dict from raw company_data and research.
-    All values are safely extracted with sensible defaults.
+    Uses [DATA REQUIRED] for missing values (Rule 1) instead of silent defaults.
     """
+    has_transcript = bool(company_data.get("management_transcript"))
+    if has_transcript:
+        mgmt_status = "Transcript provided — see CEO INTERVIEW SIGNALS below."
+    else:
+        mgmt_status = "NOT PROVIDED"
+
     return {
         "company_name": _safe_get(company_data, "company_name", "Unknown Company"),
         "sector": _safe_get(company_data, "sector", "General"),
         "fiscal_year": _safe_get(company_data, "fiscal_year", "FY2024"),
-        # P&L
-        "revenue": _safe_get(company_data, "revenue"),
-        "ebitda": _safe_get(company_data, "ebitda"),
-        "ebitda_margin": _safe_get(company_data, "ebitda_margin"),
-        "pat": _safe_get(company_data, "pat"),
-        "net_margin": _safe_get(company_data, "net_margin"),
-        # Ratios
-        "dscr": _safe_get(company_data, "dscr", 1.0),
-        "interest_coverage": _safe_get(company_data, "interest_coverage", 1.0),
-        "debt_to_equity": _safe_get(company_data, "debt_to_equity"),
-        "current_ratio": _safe_get(company_data, "current_ratio"),
-        "roe": _safe_get(company_data, "roe"),
-        "roa": _safe_get(company_data, "roa"),
-        # Cash flow
-        "cfo": _safe_get(company_data, "cfo"),
-        "free_cash_flow": _safe_get(company_data, "free_cash_flow"),
-        # Balance sheet
-        "total_debt": _safe_get(company_data, "total_debt"),
-        "total_equity": _safe_get(company_data, "total_equity"),
-        # ML scores
+        # P&L — display versions (Rule 1: [DATA REQUIRED] if missing)
+        "revenue_display": _display_val(company_data.get("revenue")),
+        "ebitda_display": _display_val(company_data.get("ebitda")),
+        "ebitda_margin_display": _display_pct(company_data.get("ebitda_margin")),
+        "pat_display": _display_val(company_data.get("pat")),
+        "net_margin_display": _display_pct(company_data.get("net_margin")),
+        # Ratios — display versions
+        "dscr_display": _display_ratio(company_data.get("dscr")),
+        "interest_coverage_display": _display_ratio(company_data.get("interest_coverage")),
+        "debt_to_equity_display": _display_ratio(company_data.get("debt_to_equity")),
+        "current_ratio_display": _display_ratio(company_data.get("current_ratio")),
+        "roe_display": _display_pct(company_data.get("roe")),
+        "roa_display": _display_pct(company_data.get("roa")),
+        # Cash flow — display versions
+        "cfo_display": _display_val(company_data.get("cfo")),
+        "free_cash_flow_display": _display_val(company_data.get("free_cash_flow")),
+        # Balance sheet — display versions
+        "total_debt_display": _display_val(company_data.get("total_debt")),
+        "total_equity_display": _display_val(company_data.get("total_equity")),
+        # Promoter — display versions (Rule 7: never default to 50%/62%)
+        "promoter_holding_pct_display": _display_pct(company_data.get("promoter_holding_pct")),
+        "promoter_pledge_pct_display": _display_pct(company_data.get("promoter_pledge_pct")),
+        # ML scores (numeric — always available from pipeline)
         "ensemble_pd": _safe_get(company_data, "ensemble_pd", 0.15),
         "xgb_pd": _safe_get(company_data, "xgb_pd", 0.15),
         "lending_decision": _safe_get(company_data, "lending_decision", "REVIEW"),
         "model_confidence": _safe_get(company_data, "model_confidence", "MODERATE"),
         "risk_premium": _safe_get(company_data, "risk_premium", 4.0),
-        # Alt data
+        # Alt data (numeric — always available from pipeline)
         "satellite_activity_score": _safe_get(company_data, "satellite_activity_score", 70.0),
         "satellite_activity_category": _safe_get(company_data, "satellite_activity_category", "ACTIVE"),
         "gst_vs_bank_divergence": _safe_get(company_data, "gst_vs_bank_divergence"),
         "gst_filing_delays_count": _safe_get(company_data, "gst_filing_delays_count", 0),
         "contagion_risk_score": _safe_get(company_data, "contagion_risk_score"),
-        "promoter_holding_pct": _safe_get(company_data, "promoter_holding_pct", 0.5),
-        "promoter_pledge_pct": _safe_get(company_data, "promoter_pledge_pct"),
-        # CEO interview
-        "ceo_sentiment_overall": _safe_get(company_data, "ceo_sentiment_overall", 0.5),
-        "ceo_specificity_score": _safe_get(company_data, "ceo_specificity_score", 0.5),
-        "ceo_deflection_score": _safe_get(company_data, "ceo_deflection_score", 0.2),
+        # Management transcript status (Rule 5)
+        "management_transcript_status": mgmt_status,
         # Research
         "industry_outlook": research.get("industry_outlook", "NEUTRAL"),
         "research_sentiment_score": research.get("research_sentiment_score", 0.5),
@@ -244,38 +311,75 @@ def _fallback_bull_case(company_data: dict, research: dict) -> str:
     """
     Generate a rule-based bull case when Claude API is unavailable.
     Uses template filling with actual data values — no LLM needed.
+    Enforces Rules 1 (DATA REQUIRED), 5 (management transcript), 6 (default archetype).
     """
-    ctx = _build_prompt_context(company_data, research)
-    name = ctx["company_name"]
-    sector = ctx["sector"]
+    name = _safe_get(company_data, "company_name", "Unknown Company")
+    sector = _safe_get(company_data, "sector", "General")
 
-    # Identify top financial strengths
+    # Rule 1: Use display helpers — [DATA REQUIRED] for missing values
+    dscr = company_data.get("dscr")
+    ebitda_margin = company_data.get("ebitda_margin")
+    cfo = company_data.get("cfo")
+    revenue = company_data.get("revenue")
+    ebitda = company_data.get("ebitda")
+    free_cash_flow = company_data.get("free_cash_flow")
+    interest_coverage = company_data.get("interest_coverage")
+    current_ratio = company_data.get("current_ratio")
+    debt_to_equity = company_data.get("debt_to_equity")
+    ensemble_pd = _safe_get(company_data, "ensemble_pd", 0.15)
+    lending_decision = _safe_get(company_data, "lending_decision", "REVIEW")
+    has_transcript = bool(company_data.get("management_transcript"))
+
+    # Identify top financial strengths (only from actual data)
     strengths = []
-    if ctx["dscr"] >= 1.5:
-        strengths.append(f"Healthy DSCR of {ctx['dscr']:.2f}x (well above 1.0 threshold)")
-    if ctx["interest_coverage"] >= 1.5:
-        strengths.append(f"Strong interest coverage of {ctx['interest_coverage']:.2f}x")
-    if ctx["ebitda_margin"] >= 0.12:
-        strengths.append(f"Robust EBITDA margin of {ctx['ebitda_margin']:.1%}")
-    if ctx["current_ratio"] >= 1.0:
-        strengths.append(f"Adequate liquidity with current ratio of {ctx['current_ratio']:.2f}x")
-    if ctx["cfo"] > 0:
-        strengths.append(f"Positive operating cash flow of ₹{ctx['cfo']:.1f} Cr")
-    if ctx["debt_to_equity"] < 2.5:
-        strengths.append(f"Manageable leverage at {ctx['debt_to_equity']:.2f}x D/E")
+    if dscr is not None and dscr >= 1.5:
+        strengths.append(f"Healthy DSCR of {dscr:.2f}x (well above 1.0 threshold)")
+    if interest_coverage is not None and interest_coverage >= 1.5:
+        strengths.append(f"Strong interest coverage of {interest_coverage:.2f}x")
+    if ebitda_margin is not None and ebitda_margin >= 0.12:
+        strengths.append(f"Robust EBITDA margin of {ebitda_margin:.1%}")
+    if current_ratio is not None and current_ratio >= 1.0:
+        strengths.append(f"Adequate liquidity with current ratio of {current_ratio:.2f}x")
+    if cfo is not None and cfo > 0:
+        strengths.append(f"Positive operating cash flow of ₹{cfo:.1f} Cr")
+    if debt_to_equity is not None and debt_to_equity < 2.5:
+        strengths.append(f"Manageable leverage at {debt_to_equity:.2f}x D/E")
     if not strengths:
         strengths.append("Operational track record in the sector")
 
     strengths_text = "\n".join(f"   - {s}" for s in strengths[:5])
-    positives_text = ctx["research_positives"]
+
+    research_positives = "\n".join(
+        f"  - {p}" for p in research.get("key_positives_found", ["No data available"])
+    )
+    industry_outlook = research.get("industry_outlook", "NEUTRAL")
+    research_sentiment = research.get("research_sentiment_score", 0.5)
+
+    # Rule 5: Management quality gating
+    if has_transcript:
+        mgmt_section = f"""## 4. MANAGEMENT QUALITY
+
+Promoter holding at {_display_pct(company_data.get('promoter_holding_pct'))} reflects skin in the game. \
+CEO interview sentiment and specificity scores suggest reasonable management transparency."""
+    else:
+        mgmt_section = """## 4. MANAGEMENT QUALITY
+
+Management Quality Assessment: INSUFFICIENT DATA — No transcript provided.
+Schedule management interaction before final credit decision."""
+
+    # Rule 6: Default archetype
+    if cfo is not None and cfo > 0:
+        archetype_note = "No close default archetype — strong positive operating cash flows."
+    else:
+        archetype_note = "Default archetype assessment requires further analysis."
 
     return f"""## 1. EXECUTIVE SUMMARY
 
 {name} operating in the {sector} sector presents a viable lending opportunity. \
-The company demonstrates {ctx['dscr']:.2f}x DSCR, {ctx['ebitda_margin']:.1%} EBITDA margin, \
-and ₹{ctx['cfo']:.1f} Cr positive operating cash flow, indicating adequate \
-debt servicing capacity. ML models assign an ensemble PD of {ctx['ensemble_pd']:.2%}, \
-supporting a {ctx['lending_decision']} recommendation.
+The company demonstrates {_display_ratio(dscr)} DSCR, {_display_pct(ebitda_margin)} EBITDA margin, \
+and {_display_val(cfo)} positive operating cash flow, indicating adequate \
+debt servicing capacity. ML models assign an ensemble PD of {ensemble_pd:.2%}, \
+supporting a {lending_decision} recommendation.
 
 ## 2. FINANCIAL STRENGTHS
 
@@ -283,32 +387,29 @@ supporting a {ctx['lending_decision']} recommendation.
 
 ## 3. BUSINESS MOMENTUM
 
-Revenue of ₹{ctx['revenue']:.1f} Cr with EBITDA of ₹{ctx['ebitda']:.1f} Cr \
-reflects a functioning business model. Free cash flow of ₹{ctx['free_cash_flow']:.1f} Cr \
+Revenue of {_display_val(revenue)} with EBITDA of {_display_val(ebitda)} \
+reflects a functioning business model. Free cash flow of {_display_val(free_cash_flow)} \
 provides internal funding capacity. The satellite activity score of \
-{ctx['satellite_activity_score']:.1f} ({ctx['satellite_activity_category']}) \
+{_safe_get(company_data, 'satellite_activity_score', 70.0):.1f} \
+({_safe_get(company_data, 'satellite_activity_category', 'ACTIVE')}) \
 confirms operational activity at the physical premises.
 
-## 4. MANAGEMENT QUALITY
-
-Promoter holding at {ctx['promoter_holding_pct']:.1%} reflects skin in the game. \
-CEO interview sentiment score of {ctx['ceo_sentiment_overall']:.2f} with specificity \
-at {ctx['ceo_specificity_score']:.2f} suggests reasonable management transparency. \
-Deflection score of {ctx['ceo_deflection_score']:.2f} is within acceptable range.
+{mgmt_section}
 
 ## 5. INDUSTRY TAILWINDS
 
-Industry outlook is assessed as {ctx['industry_outlook']}. \
-Research sentiment score: {ctx['research_sentiment_score']:.2f}.
+Industry outlook is assessed as {industry_outlook}. \
+Research sentiment score: {research_sentiment:.2f}.
 
 Key positives identified:
-{positives_text}
+{research_positives}
 
 ## 6. RISK MITIGANTS
 
-- GST filings are largely compliant with {ctx['gst_filing_delays_count']} delays reported
-- Network contagion risk score of {ctx['contagion_risk_score']:.2f} is within monitored range
-- Promoter pledge at {ctx['promoter_pledge_pct']:.1%} is manageable with covenant oversight
+- GST filings are largely compliant with {_safe_get(company_data, 'gst_filing_delays_count', 0)} delays reported
+- Network contagion risk score of {_safe_get(company_data, 'contagion_risk_score', 0.0):.2f} is within monitored range
+- Promoter pledge at {_display_pct(company_data.get('promoter_pledge_pct'))} is manageable with covenant oversight
+- {archetype_note}
 - Ensemble ML model consensus supports the lending decision
 """
 

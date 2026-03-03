@@ -1,5 +1,5 @@
 """
-Intelli-Credit - Feature Engineering Pipeline
+Yakṣarāja - Feature Engineering Pipeline
 ===============================================
 Loads the raw synthetic (or real) dataset, computes / verifies all
 engineered features, adds Default-DNA archetype similarity scores,
@@ -339,7 +339,7 @@ def build_feature_matrix(raw_csv_path: str, output_path: str) -> pd.DataFrame:
         The final, fully-engineered feature matrix.
     """
     print("=" * 65)
-    print("  Intelli-Credit  --  Feature Engineering Pipeline")
+    print("  Yakṣarāja  --  Feature Engineering Pipeline")
     print("=" * 65)
 
     # ---- 1. Load -----------------------------------------------------------

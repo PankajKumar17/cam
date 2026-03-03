@@ -1,7 +1,7 @@
 Loaded 352 rows × 149 columns from data/synthetic/intelli_credit_dataset.csv
 
 ======================================================================
-  INTELLI-CREDIT  --  DATASET VALIDATION REPORT
+  YAKṢARĀJA  --  DATASET VALIDATION REPORT
 ======================================================================
   [PASS] Total row count is reasonable (300-500)  (352 rows)
   [PASS] Default rate is ~25-45%  (31.8% default rate)

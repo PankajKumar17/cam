@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Dissent Agent + Coordinator (Person 3, Innovation 10)
+Yakṣarāja — Dissent Agent + Coordinator (Person 3, Innovation 10)
 ========================================================================
 The "Bear Case" agent and final recommendation coordinator in the
 adversarial two-agent CAM system.
@@ -35,14 +35,48 @@ except ImportError:
 # ║  CONSTANTS                                                                ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-DISSENT_SYSTEM_PROMPT = """You are the devil's advocate on Vivriti Capital's credit committee. \
-Your ONLY job is to find every possible reason NOT to approve this loan. \
-Challenge every optimistic assumption. Find every red flag in the data. \
-Be specific and cite exact numbers. You must produce at least 4-5 \
+DISSENT_SYSTEM_PROMPT = """You are the devil's advocate on Vivriti Capital's credit committee.
+Your ONLY job is to find every possible reason NOT to approve this loan.
+Challenge every optimistic assumption. Find every red flag in the data.
+Be specific and cite exact numbers. You must produce at least 4-5
 counter-arguments regardless of how strong the application looks.
 
-You write in a formal, sharply analytical tone. You never hedge — you always \
-make the strongest possible negative case. You look for hidden risks, \
+=== MANDATORY RULES ===
+
+RULE 1 — FINANCIAL DATA: Use ONLY the figures provided. Never invent, estimate, or
+use placeholder financials. If a figure is missing, write "[DATA REQUIRED]".
+
+RULE 2 — COMPANY IDENTITY: The sector and all narrative must match the actual company.
+Never write about a fictional or substitute company.
+
+RULE 3 — SECTOR-APPROPRIATE STRESS SCENARIOS:
+- Steel: iron ore price spike, coking coal costs, construction/auto demand slowdown,
+  EU carbon border adjustment (CBAM), China dumping.
+- Wind Energy: nacelle/blade component cost inflation, RPO mandate revision,
+  PPA rate compression, interest rate sensitivity on project financing,
+  order execution delays, DISCOM credit risk, ISTS waiver policy changes.
+- Textiles: cotton/raw material price spike, export demand contraction,
+  INR appreciation, working capital squeeze.
+- General: revenue decline, interest rate rise, working capital pressure.
+Never apply textile or agricultural commodity stresses to steel or wind energy companies.
+
+RULE 4 — INTERNAL CONSISTENCY:
+(a) DSCR < 1.0 → decision = REJECT. Do NOT set a credit limit.
+(b) Gross margin and EBITDA margin must be arithmetically consistent.
+(c) A Bear metric (DSCR 0.47) cannot be cited as a Bull strength.
+(d) Bull Case and Bear Case must use the same underlying figures.
+(e) PD > 40% → recommend REJECT.
+
+RULE 5 — MANAGEMENT QUALITY: Generate scores ONLY if an earnings call transcript
+or interview is provided. If not, write: "INSUFFICIENT DATA — No transcript provided."
+
+RULE 6 — DEFAULT ARCHETYPE: Assign only if genuine distress pattern exists.
+For companies with strong positive operating cash flows, write: "No close default archetype."
+
+RULE 7 — PROMOTER SHAREHOLDING: Use only figures from actual data.
+
+You write in a formal, sharply analytical tone. You never hedge — you always
+make the strongest possible negative case. You look for hidden risks,
 trajectory problems, and data inconsistencies that others miss.
 """
 
@@ -164,14 +198,65 @@ Return a JSON object with EXACTLY these keys:
 
 Guidelines for the decision:
 - If PD < 0.20 and DSCR > 1.5: lean toward APPROVE or CONDITIONAL_APPROVE
-- If PD between 0.20 and 0.50: likely CONDITIONAL_APPROVE with strong covenants
-- If PD > 0.50 or DSCR < 1.0: lean toward REJECT
+- If PD between 0.20 and 0.40: likely CONDITIONAL_APPROVE with strong covenants
+- If PD > 0.40 or DSCR < 1.0: MUST REJECT — do NOT set a credit limit
+- If decision is REJECT, set recommended_limit_cr to 0
 - recommended_limit_cr = revenue * 0.25 * (1 - PD) as a starting point
 - recommended_rate_pct = repo_rate(6.5%) + risk_premium from ML model
 - key_conditions should be specific covenants (DSCR floor, pledge limits, reporting requirements)
 
 Return ONLY valid JSON, no other text.
 """
+
+
+# ── Sector-specific stress scenario registry (Rule 3) ───────────────────────
+
+SECTOR_STRESS_SCENARIOS = {
+    "Steel": [
+        "Iron ore price spike +40%",
+        "Coking coal cost surge +35%",
+        "Construction/auto demand slowdown -25%",
+        "EU Carbon Border Adjustment (CBAM) impact",
+        "China steel dumping — price compression",
+    ],
+    "Metals & Mining": [
+        "Iron ore price spike +40%",
+        "Coking coal cost surge +35%",
+        "Construction/auto demand slowdown -25%",
+        "EU Carbon Border Adjustment (CBAM) impact",
+        "China metals dumping — price compression",
+    ],
+    "Wind Energy": [
+        "Nacelle/blade component cost inflation +20%",
+        "RPO mandate revision — reduced renewable obligations",
+        "PPA rate compression -15%",
+        "Interest rate sensitivity on project financing +200bps",
+        "Order execution delays — supply chain disruption",
+        "DISCOM credit risk / payment delays 180+ days",
+        "ISTS waiver policy changes",
+    ],
+    "Renewable Energy": [
+        "Nacelle/blade component cost inflation +20%",
+        "RPO mandate revision — reduced renewable obligations",
+        "PPA rate compression -15%",
+        "Interest rate sensitivity on project financing +200bps",
+        "DISCOM credit risk / payment delays 180+ days",
+    ],
+    "Textiles": [
+        "Cotton/raw material price spike +30%",
+        "Export demand contraction -20%",
+        "INR appreciation eroding export competitiveness",
+        "Working capital squeeze — receivable cycle elongation",
+        "China+1 trend reversal risk",
+    ],
+    "default": [
+        "Revenue decline -20%",
+        "Interest rate increase +200bps",
+        "Working capital pressure — receivable cycle elongation",
+        "Key customer/supplier concentration risk materializing",
+        "Commodity input cost spike +25%",
+    ],
+}
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -303,14 +388,18 @@ def _fallback_bear_case(company_data: dict, approval_text: str, research: dict) 
     """
     Generate a rule-based bear case when Claude API is unavailable.
     Systematically finds and highlights every weak data point.
+    Uses sector-appropriate stress scenarios (Rule 3).
     """
     ctx = _build_bear_context(company_data, research)
     name = ctx["company_name"]
+    sector = ctx["sector"]
 
-    # ── Identify red flags ────────────────────────────────────────────────
+    # ── Identify red flags ────────────────────────────────────────────────────────────
     concerns = []
     if ctx["dscr"] < 1.5:
         concerns.append(f"DSCR of {ctx['dscr']:.2f}x leaves thin margin above 1.0 — any revenue shock could breach covenant")
+    if ctx["dscr"] < 1.0:
+        concerns.append(f"CRITICAL: DSCR of {ctx['dscr']:.2f}x is BELOW 1.0 — mandatory REJECT per underwriting policy (Rule 4a)")
     if ctx["debt_to_equity"] > 1.5:
         concerns.append(f"Debt-to-equity of {ctx['debt_to_equity']:.2f}x indicates high leverage concentration")
     if ctx["current_ratio"] < 1.2:
@@ -319,6 +408,8 @@ def _fallback_bear_case(company_data: dict, approval_text: str, research: dict) 
         concerns.append(f"Net margin of {ctx['net_margin']:.1%} leaves minimal buffer for cost shocks")
     if ctx["ensemble_pd"] > 0.10:
         concerns.append(f"Ensemble PD of {ctx['ensemble_pd']:.2%} implies non-trivial default probability")
+    if ctx["ensemble_pd"] > 0.40:
+        concerns.append(f"CRITICAL: PD of {ctx['ensemble_pd']:.2%} exceeds 40% threshold — mandatory REJECT (Rule 4e)")
     if ctx["promoter_pledge_pct"] > 0.15:
         concerns.append(f"Promoter pledge at {ctx['promoter_pledge_pct']:.1%} — forced selling risk in downturn")
     if ctx["contagion_risk_score"] > 0.3:
@@ -341,7 +432,12 @@ def _fallback_bear_case(company_data: dict, approval_text: str, research: dict) 
     concerns_text = "\n".join(f"   - {c}" for c in concerns[:6])
     risks_text = ctx["research_risks"]
 
-    # ── Stress scenario ───────────────────────────────────────────────────
+    # ── Sector-appropriate stress scenario (Rule 3) ───────────────────────────────
+    sector_scenarios = SECTOR_STRESS_SCENARIOS.get(
+        sector, SECTOR_STRESS_SCENARIOS["default"]
+    )
+    sector_stress_text = "\n".join(f"   - {s}" for s in sector_scenarios[:5])
+
     stressed_revenue = ctx["revenue"] * 0.80
     stressed_ebitda = ctx["ebitda"] * 0.70
     stressed_dscr = ctx["dscr"] * 0.65
@@ -375,7 +471,10 @@ management may be underestimating downside scenarios
 Research-identified risks:
 {risks_text}
 
-## 4. STRESS SCENARIO IMPACT
+## 4. STRESS SCENARIO IMPACT ({sector} Sector)
+
+Sector-specific stress scenarios to consider:
+{sector_stress_text}
 
 Under a moderate stress scenario (20% revenue decline, 200bps rate increase):
    - Revenue falls to ₹{stressed_revenue:.1f} Cr
@@ -455,37 +554,49 @@ def _fallback_synthesis(
     """
     Rule-based coordinator fallback when Claude API is unavailable.
     Uses ML scores and simple heuristics to produce a recommendation.
+    Enforces Rule 4a (DSCR < 1.0 → REJECT) and Rule 4e (PD > 0.40 → REJECT).
     """
     pd = scores.get("ensemble_pd", 0.25)
     dscr = scores.get("dscr", 1.0)
     revenue = scores.get("revenue", 500.0)
     risk_premium = scores.get("risk_premium", 4.0)
 
-    # Decision logic
-    if pd < 0.20 and dscr > 1.5:
-        decision = "APPROVE"
-    elif pd > 0.50 or dscr < 1.0:
+    # Decision logic — Rule 4a: DSCR < 1.0 → REJECT, Rule 4e: PD > 0.40 → REJECT
+    if dscr < 1.0 or pd > 0.40:
         decision = "REJECT"
+    elif pd < 0.20 and dscr > 1.5:
+        decision = "APPROVE"
     else:
         decision = "CONDITIONAL_APPROVE"
 
-    # Limit: revenue * 0.25 * (1 - PD)
-    limit = round(revenue * 0.25 * (1 - pd), 1)
+    # Limit: 0 for REJECT (Rule 4a), revenue * 0.25 * (1 - PD) otherwise
+    if decision == "REJECT":
+        limit = 0.0
+    else:
+        limit = round(revenue * 0.25 * (1 - pd), 1)
 
     # Rate: repo(6.5%) + risk premium
     rate = round(6.5 + risk_premium, 2)
 
     # Conditions
     conditions = []
-    if dscr < 2.0:
-        conditions.append(f"DSCR floor covenant at 1.20x — quarterly monitoring")
-    conditions.append("Promoter personal guarantee covering 50% of exposure")
-    if scores.get("promoter_pledge_pct", 0) > 0.10:
-        conditions.append("Promoter pledge cap at 25% — automatic prepayment trigger if breached")
-    conditions.append("Quarterly GST cross-verification with bank statements")
-    if scores.get("contagion_risk_score", 0) > 0.25:
-        conditions.append("Semi-annual audit of related party transactions")
-    conditions.append("Annual credit review with fresh financials")
+    if decision == "REJECT":
+        reject_reasons = []
+        if dscr < 1.0:
+            reject_reasons.append(f"DSCR of {dscr:.2f}x is below 1.0 — mandatory reject per underwriting policy")
+        if pd > 0.40:
+            reject_reasons.append(f"PD of {pd:.2%} exceeds 40% threshold — mandatory reject per risk policy")
+        conditions = reject_reasons
+    else:
+        if dscr < 2.0:
+            conditions.append(f"DSCR floor covenant at 1.20x — quarterly monitoring")
+        conditions.append("Promoter personal guarantee covering 50% of exposure")
+        if scores.get("promoter_pledge_pct", 0) > 0.10:
+            conditions.append("Promoter pledge cap at 25% — automatic prepayment trigger if breached")
+        conditions.append("Quarterly GST cross-verification with bank statements")
+        if scores.get("contagion_risk_score", 0) > 0.25:
+            conditions.append("Semi-annual audit of related party transactions")
+        conditions.append("Annual credit review with fresh financials")
 
     return {
         "lending_decision": decision,
@@ -502,7 +613,7 @@ def _fallback_synthesis(
         ),
         "final_rationale": (
             f"After weighing both perspectives, the committee recommends a {decision.replace('_', ' ')} "
-            f"with a credit limit of ₹{limit:.1f} Cr at {rate:.2f}% interest rate. "
+            f"with {'no credit limit' if decision == 'REJECT' else f'a credit limit of ₹{limit:.1f} Cr at {rate:.2f}% interest rate'}. "
             f"The ML ensemble assigns a PD of {pd:.2%} and DSCR of {dscr:.2f}x. "
             f"{'Key conditions are attached to mitigate downside risks identified by the dissent agent.' if decision != 'REJECT' else 'The risk profile does not meet the minimum underwriting standards at this time.'}"
         ),

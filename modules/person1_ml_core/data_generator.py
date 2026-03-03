@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Synthetic Dataset Generator
+Yakṣarāja — Synthetic Dataset Generator
 =============================================
 Generates realistic Indian corporate financial data for ALL 146 features.
 Calibrated from RBI NPA statistics and real Indian company distributions.
@@ -593,7 +593,7 @@ def build_dataset():
     """Build the complete synthetic dataset"""
 
     print("=" * 60)
-    print("Intelli-Credit Synthetic Dataset Generator")
+    print("Yakṣarāja Synthetic Dataset Generator")
     print("=" * 60)
 
     all_rows = []

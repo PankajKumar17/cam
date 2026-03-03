@@ -1,5 +1,5 @@
 """
-Intelli-Credit -- Dataset Validation & Visualization
+Yakṣarāja -- Dataset Validation & Visualization
 =====================================================
 Runs PASS/FAIL checks on the synthetic dataset and generates
 diagnostic charts for visual inspection.
@@ -174,7 +174,7 @@ def run_validations(df: pd.DataFrame) -> list[dict]:
 def print_report(results: list[dict]):
     """Pretty-print the PASS/FAIL report."""
     print("\n" + "=" * 70)
-    print("  INTELLI-CREDIT  --  DATASET VALIDATION REPORT")
+    print("  YAKṢARĀJA  --  DATASET VALIDATION REPORT")
     print("=" * 70)
 
     passed = sum(1 for r in results if r["status"] == "PASS")

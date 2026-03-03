@@ -1,5 +1,5 @@
 """
-Intelli-Credit — Main Pipeline
+Yakṣarāja — Main Pipeline
 ================================
 Connects all three persons' modules into one end-to-end flow.
 
@@ -416,7 +416,7 @@ def run_pipeline(
     pipeline_start = time.time()
 
     logger.info(f"\n{'═'*60}")
-    logger.info(f"  INTELLI-CREDIT — AI CREDIT DECISIONING ENGINE")
+    logger.info(f"  YAKṢARĀJA — AI CREDIT DECISIONING ENGINE")
     logger.info(f"  Company: {company_name}")
     logger.info(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"{'═'*60}")
@@ -486,7 +486,7 @@ def run_pipeline(
 
     with _layer_timer("LAYER 7 — Research Agent (Person 3)"):
         results["research"] = run_layer7_research(
-            company_name, company_data.get("sector", "Textiles")
+            company_name, company_data.get("sector", "Industrial")
         )
 
     with _layer_timer("LAYER 8 — CEO Interview Analysis (Person 3)"):
