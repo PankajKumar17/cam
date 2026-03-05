@@ -28,6 +28,17 @@ from loguru import logger
 
 load_dotenv()
 
+# ── Startup API key validation ──────────────────────────────────────────────
+_REQUIRED_KEYS = {
+    "GEMINI_API_KEY": "LLM agents (bull/bear CAM, research, CEO interview)",
+    "TAVILY_API_KEY": "Web research layer (company news & industry outlook)",
+}
+_missing = [k for k in _REQUIRED_KEYS if not os.getenv(k)]
+if _missing:
+    for k in _missing:
+        logger.error(f"❌ Missing required env var: {k}  — needed for {_REQUIRED_KEYS[k]}")
+    logger.error("Set the above keys in your .env file and restart.")
+    # Warn but don't hard-exit so fallback paths still work in demo mode
 # ── Add project root to path ────────────────────────────────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
@@ -73,11 +84,11 @@ SUNRISE_DEMO_FINANCIALS: Dict[str, Any] = {
     "roe": 0.14,
     "roa": 0.06,
     "revenue_growth": 0.08,
-    # Governance
-    "promoter_holding_pct": 0.62,
-    "promoter_pledge_pct": 0.08,
-    "institutional_holding_pct": 0.18,
-    "related_party_tx_to_rev": 0.05,
+    # Governance — leave None so CAM shows "Not Given" when real data is absent
+    "promoter_holding_pct": None,
+    "promoter_pledge_pct": None,
+    "institutional_holding_pct": None,
+    "related_party_tx_to_rev": None,
     "receivables_days": 55.0,
     # Forensic scores
     "beneish_m_score": -2.45,
@@ -186,7 +197,7 @@ def run_layer2_ml_scoring(company_data: dict) -> dict:
                 "source": "trained_models",
             }
         except Exception as e:
-            logger.error(f"ML prediction failed: {e} — using fallback")
+            logger.warning(f"ML prediction failed (stale models, retraining needed): {e} — using heuristic fallback")
 
     # Fallback: heuristic scoring from financial ratios
     logger.info("No trained models — computing heuristic PD from financial ratios")

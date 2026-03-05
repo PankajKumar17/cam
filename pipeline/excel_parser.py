@@ -343,11 +343,11 @@ def _parse_data_sheet(wb, company_name: str = None) -> dict:
         "roe": round(roe, 3) if roe else 0,
         "roa": round(roa, 3) if roa else 0,
         "revenue_growth": round(revenue_growth, 3) if revenue_growth else 0,
-        # Governance (defaults)
-        "promoter_holding_pct": 0.50,
-        "promoter_pledge_pct": 0.10,
-        "institutional_holding_pct": 0.15,
-        "related_party_tx_to_rev": 0.05,
+        # Governance — leave None so CAM shows "Not Given" when real data is absent
+        "promoter_holding_pct": None,
+        "promoter_pledge_pct": None,
+        "institutional_holding_pct": None,
+        "related_party_tx_to_rev": None,
         "receivables_days": round(365 * (receivables or 0) / max(revenue or 1, 1), 0),
         # Forensic scores
         "beneish_m_score": round(beneish_m, 2),
@@ -477,8 +477,8 @@ def _empty_company_data(company_name: str) -> dict:
         "cfo": 0, "cfi": 0, "cff": 0, "capex": 0, "free_cash_flow": 0,
         "dscr": 1.5, "interest_coverage": 2.0, "debt_to_equity": 1.5,
         "current_ratio": 1.0, "roe": 0, "roa": 0, "revenue_growth": 0,
-        "promoter_holding_pct": 0.50, "promoter_pledge_pct": 0.10,
-        "institutional_holding_pct": 0.15, "related_party_tx_to_rev": 0.05,
+        "promoter_holding_pct": None, "promoter_pledge_pct": None,
+        "institutional_holding_pct": None, "related_party_tx_to_rev": None,
         "receivables_days": 55,
         "beneish_m_score": -2.5, "beneish_dsri": 0.95, "beneish_tata": 0.03,
         "altman_z_score": 2.5, "piotroski_f_score": 5,

@@ -13,6 +13,7 @@ Module: modules/person3_llm_cam/research_agent.py
 
 import os
 import json
+import time
 from typing import TypedDict, Annotated, List, Dict, Any, Optional
 from datetime import datetime
 
@@ -37,13 +38,13 @@ except ImportError:
     logger.warning("tavily-python not installed — will use fallback data")
     TAVILY_AVAILABLE = False
 
-# ── Anthropic Claude ─────────────────────────────────────────────────────────
+# ── Google Gemini ────────────────────────────────────────────────────────────
 try:
-    import anthropic
-    ANTHROPIC_AVAILABLE = True
+    from google import genai
+    GEMINI_AVAILABLE = True
 except ImportError:
-    logger.warning("anthropic not installed — will use fallback extraction")
-    ANTHROPIC_AVAILABLE = False
+    logger.warning("google-genai not installed — will use fallback extraction")
+    GEMINI_AVAILABLE = False
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -129,26 +130,22 @@ def _tavily_search(client: Any, query: str, max_results: int = 5) -> List[Dict[s
 # ║  CLAUDE INTELLIGENCE EXTRACTION                                           ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-def _get_anthropic_client() -> Optional[Any]:
-    """Initialize Anthropic Claude client from environment."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or not ANTHROPIC_AVAILABLE:
+def _get_gemini_api_key() -> Optional[str]:
+    """Return the Gemini API key from environment, or None if not set."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or not GEMINI_AVAILABLE:
         return None
-    try:
-        return anthropic.Anthropic(api_key=api_key)
-    except Exception as e:
-        logger.error(f"Failed to initialize Anthropic client: {e}")
-        return None
+    return api_key
 
 
 def _extract_intelligence(
-    claude_client: Any,
+    api_key: Optional[str],
     search_results: List[Dict[str, Any]],
     category: str,
     company_name: str,
 ) -> Dict[str, Any]:
     """
-    Use Claude to extract credit-relevant intelligence from raw search results.
+    Use Gemini to extract credit-relevant intelligence from raw search results.
     Returns: {
         "summary": str,
         "sentiment": "POSITIVE" | "NEUTRAL" | "NEGATIVE",
@@ -158,14 +155,15 @@ def _extract_intelligence(
         "sentiment_score": float  # 0-1
     }
     """
-    if not claude_client or not search_results:
+    if not api_key or not search_results:
         return _empty_intelligence()
 
-    # Build search context for Claude
+    # Build search context — truncate each result to avoid token overflow
     context_parts = []
-    for i, r in enumerate(search_results[:8], 1):
+    for i, r in enumerate(search_results[:6], 1):
+        content = str(r.get("content", ""))[:600]
         context_parts.append(
-            f"[Source {i}] {r['title']}\n{r['content']}\nURL: {r['url']}"
+            f"[Source {i}] {r['title']}\n{content}\nURL: {r['url']}"
         )
     search_context = "\n\n---\n\n".join(context_parts)
 
@@ -189,23 +187,46 @@ The sentiment_score should be 0.0 (extremely negative) to 1.0 (extremely positiv
 Focus on financial health, management quality, regulatory risks, and business outlook.
 Return ONLY valid JSON, no other text."""
 
-    try:
-        response = claude_client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = response.content[0].text.strip()
-        # Parse JSON — handle potential markdown wrapping
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        logger.error(f"Claude returned invalid JSON for {category}: {e}")
-        return _empty_intelligence()
-    except Exception as e:
-        logger.error(f"Claude extraction failed for {category}: {e}")
-        return _empty_intelligence()
+    _max_retries = 3
+    for _attempt in range(1, _max_retries + 1):
+        try:
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-3.1-flash-lite-preview",
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(max_output_tokens=2048),
+            )
+            text = response.text.strip()
+            # Strip markdown code fences if present
+            if "```" in text:
+                import re as _re
+                m = _re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, _re.DOTALL)
+                if m:
+                    text = m.group(1)
+                else:
+                    text = _re.sub(r"^```[a-z]*\s*", "", text, flags=_re.MULTILINE).strip()
+            # Extract first {...} block as fallback
+            import re as _re
+            if not text.startswith("{"):
+                m = _re.search(r"\{.*\}", text, _re.DOTALL)
+                if m:
+                    text = m.group(0)
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Gemini returned invalid JSON for {category}: {e}")
+            return _empty_intelligence()
+        except Exception as e:
+            err = str(e).lower()
+            if "429" in err or "quota" in err or "resource exhausted" in err:
+                logger.warning(f"Rate limit hit for {category} (attempt {_attempt}/{_max_retries}) — waiting 60s...")
+                time.sleep(60)
+            elif _attempt < _max_retries:
+                logger.warning(f"Gemini extraction error for {category} (attempt {_attempt}/{_max_retries}): {e}")
+                time.sleep(2 ** _attempt)
+            else:
+                logger.error(f"Gemini extraction failed for {category}: {e}")
+                return _empty_intelligence()
+    return _empty_intelligence()
 
 
 def _empty_intelligence() -> Dict[str, Any]:
@@ -287,10 +308,10 @@ def node_extract_intelligence(state: ResearchState) -> ResearchState:
     company = state["company_name"]
     errors = list(state.get("errors", []))
 
-    claude = _get_anthropic_client()
-    if not claude:
-        logger.warning("Anthropic unavailable — skipping intelligence extraction")
-        errors.append("Anthropic API unavailable — extraction skipped")
+    gemini_key = _get_gemini_api_key()
+    if not gemini_key:
+        logger.warning("Gemini unavailable — skipping intelligence extraction")
+        errors.append("Gemini API unavailable — extraction skipped")
         return {**state, "errors": errors}
 
     # Extract intelligence per category
@@ -312,7 +333,7 @@ def node_extract_intelligence(state: ResearchState) -> ResearchState:
         if not results:
             continue
         logger.info(f"Extracting intelligence: {category}")
-        intel = _extract_intelligence(claude, results, category, company)
+        intel = _extract_intelligence(gemini_key, results, category, company)
 
         summaries.append(f"**{category}**: {intel.get('summary', 'N/A')}")
         all_risks.extend(intel.get("red_flags", []))
@@ -324,7 +345,7 @@ def node_extract_intelligence(state: ResearchState) -> ResearchState:
 
     # Determine overall industry outlook from industry extraction
     industry_intel = _extract_intelligence(
-        claude, state.get("raw_industry_outlook", []), "Industry Outlook", company
+        gemini_key, state.get("raw_industry_outlook", []), "Industry Outlook", company
     ) if state.get("raw_industry_outlook") else _empty_intelligence()
 
     avg_sentiment = (

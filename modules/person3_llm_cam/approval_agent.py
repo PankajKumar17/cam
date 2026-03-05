@@ -21,13 +21,13 @@ from loguru import logger
 
 load_dotenv()
 
-# ── Anthropic Claude ─────────────────────────────────────────────────────────
+# ── Google Gemini ────────────────────────────────────────────────────────────
 try:
-    import anthropic
-    ANTHROPIC_AVAILABLE = True
+    from google import genai
+    GEMINI_AVAILABLE = True
 except ImportError:
-    logger.warning("anthropic not installed — will use fallback bull case")
-    ANTHROPIC_AVAILABLE = False
+    logger.warning("google-genai not installed — will use fallback bull case")
+    GEMINI_AVAILABLE = False
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -242,33 +242,29 @@ def _build_prompt_context(company_data: dict, research: dict) -> dict:
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  ANTHROPIC API WITH RETRY                                                 ║
+# ║  GEMINI API WITH RETRY                                                    ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-def _get_anthropic_client() -> Optional[Any]:
-    """Initialize Anthropic client from environment."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or not ANTHROPIC_AVAILABLE:
+def _get_gemini_api_key() -> Optional[str]:
+    """Return the Gemini API key from environment, or None if not set."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or not GEMINI_AVAILABLE:
         return None
-    try:
-        return anthropic.Anthropic(api_key=api_key)
-    except Exception as e:
-        logger.error(f"Failed to init Anthropic client: {e}")
-        return None
+    return api_key
 
 
-def _call_claude_with_retry(
-    client: Any,
+def _call_gemini_with_retry(
+    api_key: str,
     system_prompt: str,
     user_prompt: str,
     max_retries: int = 3,
     max_tokens: int = 2048,
 ) -> Optional[str]:
     """
-    Call Claude API with exponential backoff retry logic.
+    Call Gemini API with exponential backoff retry logic.
 
     Args:
-        client: Anthropic client instance
+        api_key: Gemini API key
         system_prompt: System-level instruction
         user_prompt: User message content
         max_retries: Number of retry attempts (default 3)
@@ -279,27 +275,29 @@ def _call_claude_with_retry(
     """
     for attempt in range(1, max_retries + 1):
         try:
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=max_tokens,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-3.1-flash-lite-preview",
+                contents=user_prompt,
+                config=genai.types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    max_output_tokens=max_tokens,
+                ),
             )
-            return response.content[0].text.strip()
-        except anthropic.RateLimitError as e:
-            wait = 2 ** attempt
-            logger.warning(f"Rate limited (attempt {attempt}/{max_retries}), waiting {wait}s...")
-            time.sleep(wait)
-        except anthropic.APIConnectionError as e:
-            wait = 2 ** attempt
-            logger.warning(f"Connection error (attempt {attempt}/{max_retries}), waiting {wait}s: {e}")
-            time.sleep(wait)
+            return response.text.strip()
         except Exception as e:
-            logger.error(f"Claude API error (attempt {attempt}/{max_retries}): {e}")
-            if attempt < max_retries:
+            err = str(e).lower()
+            if "429" in err or "quota" in err or "resource exhausted" in err:
+                wait = 60
+                logger.warning(f"Rate limit hit (attempt {attempt}/{max_retries}) — waiting {wait}s before retry...")
+                time.sleep(wait)
+            elif attempt < max_retries:
+                logger.warning(f"Gemini API error (attempt {attempt}/{max_retries}): {e}")
                 time.sleep(2 ** attempt)
+            else:
+                logger.error(f"Gemini API error (attempt {attempt}/{max_retries}): {e}")
 
-    logger.error("All Claude API retries exhausted")
+    logger.error("All Gemini API retries exhausted")
     return None
 
 
@@ -442,20 +440,20 @@ def write_bull_case(company_data: dict, research: dict) -> str:
     ctx = _build_prompt_context(company_data, research)
     user_prompt = BULL_CASE_TEMPLATE.format(**ctx)
 
-    # Try Claude API
-    client = _get_anthropic_client()
-    if client:
-        result = _call_claude_with_retry(
-            client=client,
+    # Try Gemini API
+    api_key = _get_gemini_api_key()
+    if api_key:
+        result = _call_gemini_with_retry(
+            api_key=api_key,
             system_prompt=APPROVAL_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             max_retries=3,
             max_tokens=2048,
         )
         if result:
-            logger.info("Bull case generated via Claude API")
+            logger.info("Bull case generated via Gemini API")
             return result
-        logger.warning("Claude API returned no result — using fallback")
+        logger.warning("Gemini API returned no result — using fallback")
 
     # Fallback: rule-based generation
     logger.info("Using rule-based fallback bull case")

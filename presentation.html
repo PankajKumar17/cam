@@ -1,872 +1,878 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Yakṣarāja — AI-Powered Credit Decisioning</title>
-  <style>
-    /* ── RESET & BASE ──────────────────────────────────────────── */
-    *,
-    *::before,
-    *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intelli-Credit — AI-Powered Credit Decisioning Engine</title>
+<style>
+  /* ── RESET & BASE ──────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0B0F19; color: #E2E8F0; }
 
-    html,
-    body {
-      height: 100%;
-      overflow: hidden;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: #0B0F19;
-      color: #E2E8F0;
-    }
+  /* ── SLIDE CONTAINER ───────────────────────────────────────── */
+  .deck { position: relative; width: 100vw; height: 100vh; }
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: flex-start; align-items: center;
+    padding: 48px 72px 36px;
+    opacity: 0; pointer-events: none; transition: opacity 0.45s ease;
+    overflow-y: auto;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; }
 
-    /* ── SLIDE CONTAINER ───────────────────────────────────────── */
-    .deck {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-    }
+  /* ── BACKGROUNDS ───────────────────────────────────────────── */
+  .bg-navy   { background: linear-gradient(135deg, #0B0F19 0%, #101827 50%, #0F172A 100%); }
+  .bg-deep   { background: linear-gradient(160deg, #0D1321 0%, #0B1120 60%, #111D35 100%); }
+  .bg-accent { background: linear-gradient(135deg, #0B0F19 0%, #0a1628 50%, #0d1a30 100%); }
+  .bg-dark   { background: linear-gradient(150deg, #060A13 0%, #0B0F19 50%, #0F1629 100%); }
 
-    .slide {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-      align-items: center;
-      padding: 48px 72px 36px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.45s ease;
-      overflow-y: auto;
-    }
+  /* ── TYPOGRAPHY ────────────────────────────────────────────── */
+  h1 { font-size: 2.8rem; font-weight: 800; line-height: 1.15; margin-bottom: 12px; }
+  h2 { font-size: 2rem; font-weight: 700; line-height: 1.2; margin-bottom: 8px; }
+  h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 6px; color: #CBD5E1; }
+  p, li { font-size: 0.92rem; line-height: 1.6; color: #94A3B8; }
+  .accent { color: #00D4AA; }
+  .accent2 { color: #6366F1; }
+  .orange { color: #F59E0B; }
+  .red { color: #EF4444; }
+  .green { color: #10B981; }
+  .blue { color: #3B82F6; }
+  .white { color: #F1F5F9; }
+  .muted { color: #64748B; }
+  .small { font-size: 0.78rem; }
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.5px; }
+  .tag-teal { background: rgba(0,212,170,0.15); color: #00D4AA; }
+  .tag-indigo { background: rgba(99,102,241,0.15); color: #818CF8; }
+  .tag-amber { background: rgba(245,158,11,0.15); color: #F59E0B; }
+  .tag-red { background: rgba(239,68,68,0.12); color: #EF4444; }
+  .tag-green { background: rgba(16,185,129,0.12); color: #10B981; }
 
-    .slide.active {
-      opacity: 1;
-      pointer-events: auto;
-    }
+  /* ── LAYOUT HELPERS ────────────────────────────────────────── */
+  .row { display: flex; gap: 20px; width: 100%; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 220px; }
+  .col-2 { flex: 2; }
+  .center { text-align: center; }
+  .mt8 { margin-top: 8px; }
+  .mt16 { margin-top: 16px; }
+  .mt24 { margin-top: 24px; }
+  .mb8 { margin-bottom: 8px; }
+  .mb16 { margin-bottom: 16px; }
+  .full-w { width: 100%; }
 
-    /* ── BACKGROUNDS ───────────────────────────────────────────── */
-    .bg-navy {
-      background: linear-gradient(135deg, #0B0F19 0%, #101827 50%, #0F172A 100%);
-    }
+  /* ── GLASS CARDS ───────────────────────────────────────────── */
+  .card {
+    background: rgba(17,25,40,0.75);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 22px 24px;
+    transition: transform 0.2s, box-shadow 0.25s;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 6px 28px rgba(0,212,170,0.06); }
+  .card-sm { padding: 14px 18px; border-radius: 12px; }
 
-    .bg-deep {
-      background: linear-gradient(160deg, #0D1321 0%, #0B1120 60%, #111D35 100%);
-    }
+  /* ── METRIC BOX ────────────────────────────────────────────── */
+  .metric {
+    background: rgba(17,25,40,0.8);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    padding: 18px 22px;
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+  }
+  .metric::before { content:''; position:absolute; top:0; left:0; width:4px; height:100%; border-radius:14px 0 0 14px; }
+  .metric.teal::before { background:#00D4AA; }
+  .metric.indigo::before { background:#6366F1; }
+  .metric.amber::before { background:#F59E0B; }
+  .metric.red-bar::before { background:#EF4444; }
+  .metric.green-bar::before { background:#10B981; }
+  .metric .label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; color: #64748B; margin-bottom: 4px; }
+  .metric .value { font-size: 1.7rem; font-weight: 800; line-height: 1.15; color: #F1F5F9; }
+  .metric .sub { font-size: 0.72rem; color: #94A3B8; margin-top: 2px; }
 
-    .bg-accent {
-      background: linear-gradient(135deg, #0B0F19 0%, #0a1628 50%, #0d1a30 100%);
-    }
+  /* ── TABLE ──────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th { background: rgba(0,212,170,0.12); color: #00D4AA; font-weight: 600; text-align: left; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  td { padding: 7px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); color: #CBD5E1; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
 
-    .bg-dark {
-      background: linear-gradient(150deg, #060A13 0%, #0B0F19 50%, #0F1629 100%);
-    }
+  /* ── FLOW / DIAGRAM ────────────────────────────────────────── */
+  .flow-step {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-radius: 10px;
+    background: rgba(17,25,40,0.7);
+    border: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+  }
+  .flow-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 0.72rem; flex-shrink: 0;
+  }
+  .flow-arrow { text-align: center; color: #475569; font-size: 1.1rem; margin: 2px 0; }
 
-    /* ── TYPOGRAPHY ────────────────────────────────────────────── */
-    h1 {
-      font-size: 2.8rem;
-      font-weight: 800;
-      line-height: 1.15;
-      margin-bottom: 12px;
-    }
+  /* ── SUBTITLE BAR ──────────────────────────────────────────── */
+  .subtitle-bar {
+    width: 100%;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
 
-    h2 {
-      font-size: 2rem;
-      font-weight: 700;
-      line-height: 1.2;
-      margin-bottom: 8px;
-    }
+  /* ── PROGRESS BAR (bottom) ─────────────────────────────────── */
+  .progress-bar {
+    position: fixed; bottom: 0; left: 0; height: 3px;
+    background: linear-gradient(90deg, #00D4AA, #6366F1);
+    transition: width 0.35s ease;
+    z-index: 100;
+  }
 
-    h3 {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin-bottom: 6px;
-      color: #CBD5E1;
-    }
+  /* ── NAV ────────────────────────────────────────────────────── */
+  .nav {
+    position: fixed; bottom: 16px; right: 24px;
+    display: flex; gap: 8px; z-index: 90;
+  }
+  .nav button {
+    background: rgba(17,25,40,0.85); border: 1px solid rgba(255,255,255,0.1);
+    color: #CBD5E1; border-radius: 8px; padding: 7px 16px; cursor: pointer;
+    font-size: 0.78rem; font-weight: 600; transition: all 0.2s;
+  }
+  .nav button:hover { background: rgba(0,212,170,0.15); border-color: #00D4AA; color: #00D4AA; }
+  .slide-counter {
+    position: fixed; bottom: 18px; left: 24px; font-size: 0.72rem;
+    color: #475569; z-index: 90; font-weight: 600;
+  }
 
-    p,
-    li {
-      font-size: 0.92rem;
-      line-height: 1.6;
-      color: #94A3B8;
-    }
+  /* ── COVER SPECIAL ─────────────────────────────────────────── */
+  .cover-title { font-size: 3.4rem; font-weight: 900; background: linear-gradient(135deg, #00D4AA 0%, #6366F1 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .cover-sub { font-size: 1.15rem; color: #94A3B8; max-width: 680px; margin: 0 auto; }
+  .cover-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(0,212,170,0.1); border: 1px solid rgba(0,212,170,0.25); padding: 6px 18px; border-radius: 20px; font-size: 0.78rem; color: #00D4AA; font-weight: 600; }
 
-    .accent {
-      color: #00D4AA;
-    }
+  /* ── CODE FONT ─────────────────────────────────────────────── */
+  code { font-family: 'Cascadia Code','Fira Code',monospace; background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 4px; font-size: 0.82rem; color: #00D4AA; }
 
-    .accent2 {
-      color: #6366F1;
-    }
+  /* ── ARCHITECTURE BOX ──────────────────────────────────────── */
+  .arch-box {
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+    padding: 16px 20px; text-align: center;
+    background: rgba(17,25,40,0.6);
+  }
+  .arch-box h3 { font-size: 0.9rem; margin-bottom: 8px; }
+  .arch-box ul { list-style: none; padding: 0; }
+  .arch-box li { font-size: 0.76rem; color: #94A3B8; padding: 2px 0; }
+  .arch-connector { display: flex; align-items: center; justify-content: center; color: #475569; font-size: 1.4rem; padding: 4px 0; }
 
-    .orange {
-      color: #F59E0B;
-    }
+  /* ── LIST ───────────────────────────────────────────────────── */
+  ul.feat { list-style: none; padding: 0; }
+  ul.feat li { position: relative; padding-left: 18px; margin-bottom: 5px; font-size: 0.84rem; color: #CBD5E1; }
+  ul.feat li::before { content: '▸'; position: absolute; left: 0; color: #00D4AA; font-weight: 700; }
 
-    .red {
-      color: #EF4444;
-    }
+  /* ── ICON CIRCLE ───────────────────────────────────────────── */
+  .icon-circle {
+    width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0;
+  }
+  .ic-teal { background: rgba(0,212,170,0.15); color: #00D4AA; }
+  .ic-indigo { background: rgba(99,102,241,0.15); color: #818CF8; }
+  .ic-amber { background: rgba(245,158,11,0.15); color: #F59E0B; }
+  .ic-red { background: rgba(239,68,68,0.12); color: #EF4444; }
+  .ic-green { background: rgba(16,185,129,0.12); color: #10B981; }
 
-    .green {
-      color: #10B981;
-    }
+  /* scrollbar */
+  .slide::-webkit-scrollbar { width: 4px; }
+  .slide::-webkit-scrollbar-track { background: transparent; }
+  .slide::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
 
-    .white {
-      color: #F1F5F9;
-    }
-
-    .muted {
-      color: #64748B;
-    }
-
-    .small {
-      font-size: 0.8rem;
-    }
-
-    .tag {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-    }
-
-    .tag-teal {
-      background: rgba(0, 212, 170, 0.15);
-      color: #00D4AA;
-    }
-
-    .tag-indigo {
-      background: rgba(99, 102, 241, 0.15);
-      color: #818CF8;
-    }
-
-    .tag-amber {
-      background: rgba(245, 158, 11, 0.15);
-      color: #F59E0B;
-    }
-
-    /* ── LAYOUT ────────────────────────────────────────────────── */
-    .row {
-      display: flex;
-      gap: 20px;
-      width: 100%;
-      flex-wrap: wrap;
-    }
-
-    .col {
-      flex: 1;
-      min-width: 220px;
-    }
-
-    .center {
-      text-align: center;
-    }
-
-    .mt8 {
-      margin-top: 8px;
-    }
-
-    .mt16 {
-      margin-top: 16px;
-    }
-
-    .mt24 {
-      margin-top: 24px;
-    }
-
-    .mb8 {
-      margin-bottom: 8px;
-    }
-
-    .mb16 {
-      margin-bottom: 16px;
-    }
-
-    .full-w {
-      width: 100%;
-    }
-
-    /* ── CARDS & METRICS ───────────────────────────────────────── */
-    .card {
-      background: rgba(17, 25, 40, 0.75);
-      backdrop-filter: blur(14px);
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      border-radius: 14px;
-      padding: 22px 24px;
-    }
-
-    .card-sm {
-      padding: 14px 18px;
-      border-radius: 12px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.82rem;
-    }
-
-    th {
-      background: rgba(0, 212, 170, 0.12);
-      color: #00D4AA;
-      font-weight: 600;
-      text-align: left;
-      padding: 8px 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    td {
-      padding: 7px 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      color: #CBD5E1;
-    }
-
-    .arch-box {
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      padding: 16px 20px;
-      text-align: center;
-      background: rgba(17, 25, 40, 0.6);
-    }
-
-    .arch-connector {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #475569;
-      font-size: 1.4rem;
-      padding: 4px 0;
-    }
-
-    ul.feat {
-      list-style: none;
-      padding: 0;
-    }
-
-    ul.feat li {
-      position: relative;
-      padding-left: 18px;
-      margin-bottom: 5px;
-      font-size: 0.84rem;
-      color: #CBD5E1;
-    }
-
-    ul.feat li::before {
-      content: '▸';
-      position: absolute;
-      left: 0;
-      color: #00D4AA;
-      font-weight: 700;
-    }
-
-    .inno-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 14px;
-      width: 100%;
-    }
-
-    .subtitle-bar {
-      width: 100%;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      padding-bottom: 10px;
-      margin-bottom: 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-    }
-
-    .progress-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      height: 3px;
-      background: linear-gradient(90deg, #00D4AA, #6366F1);
-      transition: width 0.35s ease;
-      z-index: 100;
-    }
-
-    .nav {
-      position: fixed;
-      bottom: 16px;
-      right: 24px;
-      display: flex;
-      gap: 8px;
-      z-index: 90;
-    }
-
-    .nav button {
-      background: rgba(17, 25, 40, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: #CBD5E1;
-      border-radius: 8px;
-      padding: 7px 16px;
-      cursor: pointer;
-      font-size: 0.78rem;
-      font-weight: 600;
-      transition: all 0.2s;
-    }
-
-    .nav button:hover {
-      background: rgba(0, 212, 170, 0.15);
-      border-color: #00D4AA;
-      color: #00D4AA;
-    }
-
-    .slide-counter {
-      position: fixed;
-      bottom: 18px;
-      left: 24px;
-      font-size: 0.72rem;
-      color: #475569;
-      z-index: 90;
-      font-weight: 600;
-    }
-
-    .slide::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    .slide::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 4px;
-    }
-  </style>
+  /* ── GRID INNOVATION ───────────────────────────────────────── */
+  .inno-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; width: 100%; }
+  @media (max-width: 900px) { .inno-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
 </head>
-
 <body>
 
-  <div class="deck" id="deck">
+<div class="deck" id="deck">
 
-    <!-- SLIDE 1: Cover Slide -->
-    <div class="slide bg-navy active" id="s1">
-      <div
-        style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:18px;">
-        <h1
-          style="font-size: 4rem; background: linear-gradient(135deg, #00D4AA 0%, #6366F1 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-          Yakṣarāja</h1>
-        <h2 class="white">AI-Powered Credit Decisioning Engine</h2>
-        <p class="accent" style="font-size: 1.2rem; margin-top: 10px;">"The silent strength that shields and sustains
-          corporate lending."</p>
-        <div class="mt24 card" style="display:inline-block; padding: 15px 40px; border-color: #00D4AA;">
-          <p class="white"><strong>Domain:</strong> FinTech / AI</p>
-          <p class="white"><strong>Team Name:</strong> Shadow Bytes</p>
-          <p class="white"><strong>Event:</strong> Vivriti Capital Hackathon</p>
-        </div>
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 1 — SOLUTION OVERVIEW
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-navy active" id="s1">
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:18px;">
+    <div class="cover-badge">Vivriti Capital AI/ML Hackathon</div>
+    <h1 class="cover-title" style="margin-top:8px;">Intelli-Credit</h1>
+    <p class="cover-sub" style="margin-top:4px;">
+      AI-Powered Credit Decisioning Engine — automates end-to-end preparation of
+      <strong class="white">Credit Appraisal Memos</strong> using <span class="accent">11 innovations</span> in ML,
+      alternative data, and adversarial LLM agents.
+    </p>
+    <div class="row mt24" style="justify-content:center;gap:16px;flex-wrap:wrap;max-width:800px;">
+      <div class="metric teal" style="min-width:145px;">
+        <div class="label">Lines of Code</div>
+        <div class="value accent">3,745</div>
+      </div>
+      <div class="metric indigo" style="min-width:145px;">
+        <div class="label">Engineered Features</div>
+        <div class="value accent2">146</div>
+      </div>
+      <div class="metric amber" style="min-width:145px;">
+        <div class="label">Companies Modeled</div>
+        <div class="value orange">40</div>
+      </div>
+      <div class="metric green-bar" style="min-width:145px;">
+        <div class="label">Innovations</div>
+        <div class="value green">11</div>
       </div>
     </div>
-
-    <!-- SLIDE 2: Solution Overview -->
-    <div class="slide bg-deep" id="s2">
-      <div class="subtitle-bar">
-        <h2><span class="accent">Solution</span> Overview</h2>
-      </div>
-      <div class="row full-w">
-        <div class="col card mb16">
-          <h3 class="accent">1. Core ML Scoring</h3>
-          <p class="small">XGBoost, LGBM, and RF ensemble evaluating 146 engineered features to dynamically scale limits
-            and premiums.</p>
-        </div>
-        <div class="col card mb16">
-          <h3 class="accent">2. Forensic Distillation</h3>
-          <p class="small">Beneish M-Score and Altman Z-Score ensuring foundational earnings integrity before any limit
-            issuance.</p>
-        </div>
-        <div class="col card mb16">
-          <h3 class="accent">3. Agentic Dialectics</h3>
-          <p class="small">LangGraph adversarial AI (Bull vs Bear) challenging decisions to eliminate single-analyst
-            confirmation bias.</p>
-        </div>
-      </div>
-      <div class="row full-w">
-        <div class="col card">
-          <h3 class="accent">4. Sovereign Verification</h3>
-          <p class="small">Sentinel-2 and GST cross-referencing ensuring operations correlate strictly to tax logic and
-            spatial activity.</p>
-        </div>
-        <div class="col card">
-          <h3 class="accent">5. Network Defenses</h3>
-          <p class="small">Bipartite MCA network graphing to uncover hidden promoter liabilities and cascading contagion
-            shocks.</p>
-        </div>
-      </div>
-      <p class="center mt24 accent" style="font-style:italic; font-size: 1.2rem;">"Bridging the gap between raw data
-        vulnerabilities and autonomous risk defense."</p>
-    </div>
-
-    <!-- SLIDE 3: Core Algorithms -->
-    <div class="slide bg-accent" id="s3">
-      <div class="subtitle-bar">
-        <h2><span class="accent2">Core Algorithms</span> / Technology Foundations</h2>
-      </div>
-      <div class="row full-w" style="gap:16px;">
-        <div class="col card">
-          <h3 class="accent">1. 3-Model Ensemble (XGB+RF+LGB)</h3>
-          <p><strong>What it does:</strong> Predicts comprehensive PD (Probability of Default) evaluating multi-year
-            trajectories.</p>
-          <p><strong>Why it is used:</strong> Reduces variance. Handles temporal imbalances inherently via SMOTE
-            injection.</p>
-        </div>
-        <div class="col card">
-          <h3 class="accent">2. Bipartite Graph Contagion (GNN-Variant)</h3>
-          <p><strong>What it does:</strong> Maps hidden director relationships against corporate structures.</p>
-          <p><strong>Why it is used:</strong> Traditional ledgers miss shadow firm risk; topological mapping detects
-            shell entities and linkages.</p>
-        </div>
-      </div>
-      <div class="row full-w mt16" style="gap:16px;">
-        <div class="col card">
-          <h3 class="accent">3. Monte Carlo Macro Simulator</h3>
-          <p><strong>What it does:</strong> Iterates 1,000+ localized market shock vectors to predict covenant
-            elasticity.</p>
-          <p><strong>Why it is used:</strong> Validates theoretical survival constraints in a statistically valid matrix
-            rather than static analysis.</p>
-        </div>
-        <div class="col card">
-          <h3 class="accent">4. Adversarial Sentiment Extraction</h3>
-          <p><strong>What it does:</strong> Acoustic/NLP models analyzing CEO statements via VADER to generate
-            deflection markers.</p>
-          <p><strong>Why it is used:</strong> Captures overconfidence and dissonance metrics previously invisible to
-            textual-only analytics.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 4: System Architecture Flow Diagram -->
-    <div class="slide bg-dark" id="s4">
-      <div class="subtitle-bar">
-        <h2><span class="orange">System Architecture</span> Flow Diagram</h2>
-      </div>
-      <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%;">
-        <div class="arch-box mb8" style="width:70%; border-color:#00D4AA;">
-          <h3 class="accent">1. SENSORS / INPUT LAYER</h3>
-          <p class="small">JSON Financials, Sentinel-2 Optical Data, MCA Directorship DB, GST Records</p>
-        </div>
-        <div class="arch-connector">↓</div>
-        <div class="arch-box mb8" style="width:70%; border-color:#6366F1;">
-          <h3 class="accent2">2. DATA INGESTION & PIPELINE (Python 3.12, Pandas)</h3>
-          <p class="small">Feature Engineering, Velocity/Acceleration Scoring, Anomalies Cleansed</p>
-        </div>
-        <div class="arch-connector">↓</div>
-        <div class="arch-box mb8" style="width:70%; border-color:#F59E0B;">
-          <h3 class="orange">3. CORE AI ENGINE (Ensemble ML, LangGraph Agents)</h3>
-          <p class="small">SHAP Evaluation, Dynamic Default Probability Array, Theory-of-Mind Debates</p>
-        </div>
-        <div class="arch-connector">↓</div>
-        <div class="arch-box mb8" style="width:70%; border-color:#10B981;">
-          <h3 class="green">4. RESPONSE & PRESENTATION (python-docx)</h3>
-          <p class="small">Validation Rules enforcement constraints -> Printable Complete CAM DOCX</p>
-        </div>
-        <div class="arch-connector">↓</div>
-        <div class="arch-box" style="width:70%; border-color:#E2E8F0;">
-          <h3 class="white">5. DASHBOARD GUI (Streamlit)</h3>
-          <p class="small">Interactive Operator Cockpit, Deep Dives, Radar Metrics & Print Engine</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 5: AI Engine Deep Dive -->
-    <div class="slide bg-navy" id="s5">
-      <div class="subtitle-bar">
-        <h2><span class="accent">AI/Engine</span> Deep Dive</h2>
-      </div>
-      <div class="card full-w">
-        <h3>Real-Time Performance: Yakṣarāja vs Traditional System</h3>
-        <table class="mt16">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th>Yakṣarāja System</th>
-              <th>Traditional Processing</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Decision Latency</strong></td>
-              <td><strong class="green">&lt; 3 mins</strong> (End-to-End)</td>
-              <td><strong class="red">5–7 Days</strong></td>
-            </tr>
-            <tr>
-              <td><strong>Data Parsing Speed</strong></td>
-              <td>1+ Mn events scalable logic via caching</td>
-              <td>Manual Analyst Hours</td>
-            </tr>
-            <tr>
-              <td><strong>Analytical Depth</strong></td>
-              <td>146 Features + Acoustic/Satellite inputs</td>
-              <td>20 Financial Ratios</td>
-            </tr>
-            <tr>
-              <td><strong>Cognitive Bias</strong></td>
-              <td><strong class="green">0%</strong> (Agents enforce objective thresholds)</td>
-              <td><strong class="red">High</strong> (Analyst Optimism)</td>
-            </tr>
-            <tr>
-              <td><strong>Fraud Deflection</strong></td>
-              <td>94% earlier alerts on GST/M-Score divergence</td>
-              <td>Reactive post-mortem only</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="mt24 center muted">Our AI Engine isolates vulnerabilities instantly by applying statistical ML on
-          structured targets while unleashing adversarial LLMs on unstructured narratives.</p>
-      </div>
-    </div>
-
-    <!-- SLIDE 6: Multi-Layer Architecture -->
-    <div class="slide bg-deep" id="s6">
-      <div class="subtitle-bar">
-        <h2><span class="accent2">Multi-Layer Architecture</span> (5-Layer Model)</h2>
-      </div>
-      <div class="row full-w">
-        <div class="col arch-box mb8">
-          <h3 class="accent">1. Assets Layer</h3>
-          <p class="small">Target Companies, Financial Time Series</p>
-        </div>
-        <div class="col arch-box mb8">
-          <h3 class="accent">2. Collection Layer</h3>
-          <p class="small">REST APIs, Tavily Web, Sentinel, MCA</p>
-        </div>
-      </div>
-      <div class="row full-w">
-        <div class="col arch-box mb8">
-          <h3 class="accent">3. Data Pipeline Layer</h3>
-          <p class="small">Imbalance rectification (SMOTE), temporal boundaries</p>
-        </div>
-      </div>
-      <div class="row full-w">
-        <div class="col arch-box mb8">
-          <h3 class="accent">4. Analytics Layer</h3>
-          <p class="small">XGB/LGB ensembles, Monte Carlo, SHAP metrics</p>
-        </div>
-        <div class="col arch-box mb8">
-          <h3 class="accent">5. Intelligence & Response</h3>
-          <p class="small">Bull/Bear LangGraph Agents, DOCX Generator, Limits issuance</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 7: Tech Stack & DevSecOps -->
-    <div class="slide bg-accent" id="s7">
-      <div class="subtitle-bar">
-        <h2><span class="green">Tech Stack, DevSecOps & Deployment</span></h2>
-      </div>
-      <div class="row full-w" style="gap:16px;">
-        <div class="col card">
-          <h3 class="accent">1. Backend Pipeline</h3>
-          <ul class="feat mt8">
-            <li>Python 3.12 pipelines</li>
-            <li>Pandas / NumPy data engine</li>
-            <li>python-docx generation</li>
-          </ul>
-        </div>
-        <div class="col card">
-          <h3 class="accent">2. ML / AI Stack</h3>
-          <ul class="feat mt8">
-            <li>Scikit-Learn, LightGBM, XGBoost</li>
-            <li>Anthropic Claude, Whisper, NetworkX</li>
-            <li>SHAP Explainer</li>
-          </ul>
-        </div>
-      </div>
-      <div class="row full-w mt16" style="gap:16px;">
-        <div class="col card">
-          <h3 class="accent">3. Infrastructure / UI</h3>
-          <ul class="feat mt8">
-            <li>Streamlit frontend UI application</li>
-            <li>Interactive Plotly graphs</li>
-            <li>Modularized python execution scripts</li>
-          </ul>
-        </div>
-        <div class="col card">
-          <h3 class="accent">4. Security / Resilience</h3>
-          <ul class="feat mt8">
-            <li>Strict API isolation models</li>
-            <li>Stateless LLM constraints + Fallbacks</li>
-            <li>Robust test-driven components (PyTest: 75 passed)</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 8: Breakthrough Innovations -->
-    <div class="slide bg-dark" id="s8">
-      <div class="subtitle-bar">
-        <h2><span class="orange">Breakthrough Innovations</span></h2>
-      </div>
-      <div class="inno-grid">
-        <div class="card card-sm">
-          <h3 class="accent">1. Theory-of-Mind Firewall (Adversarial AI)</h3>
-          <p class="small"><strong>How it works:</strong> Dual Bull and Bear LangGraph agents evaluating the
-            scenario.<br><strong>Advantage:</strong> Eliminates confirmation bias organically.</p>
-        </div>
-        <div class="card card-sm">
-          <h3 class="accent">2. Default DNA Matching</h3>
-          <p class="small"><strong>How it works:</strong> Correlates velocity paths to historic bankruptcies (e.g. Jet
-            Airways).<br><strong>Advantage:</strong> Signals historic trajectories before failure.</p>
-        </div>
-        <div class="card card-sm">
-          <h3 class="accent">3. Sentinel-2 Ghost Factory Index</h3>
-          <p class="small"><strong>How it works:</strong> Heat/Activity map against physical
-            disclosure.<br><strong>Advantage:</strong> Bypasses fake paper-trails seamlessly.</p>
-        </div>
-        <div class="card card-sm">
-          <h3 class="accent">4. Promoter Graph Network Contagion</h3>
-          <p class="small"><strong>How it works:</strong> Cross-connects directors to default
-            instances.<br><strong>Advantage:</strong> Flags high-risk proxy and shadow firms instantly.</p>
-        </div>
-        <div class="card card-sm">
-          <h3 class="accent">5. CEO Whisper Analytics</h3>
-          <p class="small"><strong>How it works:</strong> Semantic models on transcripts mapping deception
-            markers.<br><strong>Advantage:</strong> Identifies non-obvious leadership deterioration.</p>
-        </div>
-        <div class="card card-sm">
-          <h3 class="accent">6. Stochastic Covenant Shocks</h3>
-          <p class="small"><strong>How it works:</strong> 1,000 simulations under varied RBI macro
-            stresses.<br><strong>Advantage:</strong> Maps DSCR resiliency vs static thresholds mathematically.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 9: Innovations Flow Diagram -->
-    <div class="slide bg-navy" id="s9">
-      <div class="subtitle-bar">
-        <h2><span class="accent">Innovations Flow</span> Diagram</h2>
-      </div>
-      <div class="center"
-        style="width:100%; height:75%; display:flex; flex-direction:column; justify-content:space-around;">
-        <div class="row center">
-          <div class="col card" style="border-left: 4px solid #00D4AA;">
-            <h3>Input Flow</h3>
-            <p class="small">Financials + Voice/Text + MCA Connectors + Satellite Geo</p>
-          </div>
-        </div>
-        <div class="arch-connector">↓</div>
-        <div class="row center">
-          <div class="col card" style="border-left: 4px solid #6366F1;">
-            <h3>Prediction Flow</h3>
-            <p class="small">Default DNA Arrays + XGB Ensembles → Early Alerts</p>
-          </div>
-          <div class="col card" style="border-left: 4px solid #F59E0B;">
-            <h3>Authentication Flow</h3>
-            <p class="small">M-Score Forensics + GST Mismatches → Data Integrity Verified</p>
-          </div>
-        </div>
-        <div class="arch-connector">↓</div>
-        <div class="row center">
-          <div class="col card" style="border-left: 4px solid #10B981;">
-            <h3>Autonomous Defense Flow</h3>
-            <p class="small">Bull/Bear Agentic Negotiation → Final CAM Limits Setup</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 10: Top 3 Innovations Working -->
-    <div class="slide bg-deep" id="s10">
-      <div class="subtitle-bar">
-        <h2><span class="accent2">Top 3 Innovations Working</span></h2>
-      </div>
-      <div class="row full-w">
-        <div class="col card">
-          <h3 class="accent">1. Network Contagion</h3>
-          <ul class="feat mt8">
-            <li><strong>Inputs:</strong> Director Identification Numbers (DIN).</li>
-            <li><strong>Model:</strong> NetworkX bipartite linkage.</li>
-            <li><strong>Output:</strong> Risk contagion score mapped to connected NPAs.</li>
-            <li><strong>Metrics:</strong> Computes 1M+ edges recursively in < 15ms.</li>
-          </ul>
-        </div>
-        <div class="col card">
-          <h3 class="accent">2. Adversarial CAM Synthesis</h3>
-          <ul class="feat mt8">
-            <li><strong>Inputs:</strong> Raw engine predictions (PD), external research.</li>
-            <li><strong>Model:</strong> Claude 3 Models in State Graphs.</li>
-            <li><strong>Output:</strong> A fully dialectical approval or rejection verdict.</li>
-            <li><strong>Metrics:</strong> Zero-shot 100% adherence to valid risk matrices.</li>
-          </ul>
-        </div>
-        <div class="col card">
-          <h3 class="accent">3. DNA Default Match</h3>
-          <ul class="feat mt8">
-            <li><strong>Inputs:</strong> 3-year trailing trajectory signals.</li>
-            <li><strong>Model:</strong> Trajectory similarity mapping.</li>
-            <li><strong>Output:</strong> High % match against prominent bankrupt firms.</li>
-            <li><strong>Metrics:</strong> Near-immediate early-warning flag trigger.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 11: Complete System Flowchart -->
-    <div class="slide bg-accent" id="s11">
-      <div class="subtitle-bar">
-        <h2><span class="white">Complete System Flowchart</span></h2>
-      </div>
-      <div class="card center full-w" style="padding: 40px; border-color: #00D4AA;">
-        <h3 class="accent">The End-to-End Orchestration</h3>
-        <p class="mt16 muted" style="font-size:1.1rem; line-height:2.2;">
-          Raw Data Ingestion <br>
-          <span class="accent">↓</span><br>
-          <strong>Forensic Distillation</strong> (Beneish & Altman Z) + <strong>Feature Engineering</strong> (146
-          metrics)<br>
-          <span class="accent">↓</span><br>
-          <strong>Sovereign & Alternative Metrics</strong> (Satellite, GST, Web Research, Media Sentiment)<br>
-          <span class="accent">↓</span><br>
-          <strong>Core Scoring Engine</strong> (PD generation, Edge Thresholding, Graph Linkage)<br>
-          <span class="accent">↓</span><br>
-          <strong>Multi-Agent Review</strong> (LangGraph Synthesizer)<br>
-          <span class="accent">↓</span><br>
-          <strong>Automated Export</strong> (DOCX and Streamlit Visual Dashboard)
-        </p>
-      </div>
-    </div>
-
-    <!-- SLIDE 12: Real World Impact -->
-    <div class="slide bg-dark" id="s12">
-      <div class="subtitle-bar">
-        <h2><span class="orange">Real World Impact</span></h2>
-      </div>
-      <div class="row full-w mt16">
-        <div class="col card">
-          <h3 class="accent">Strategic Upgrades</h3>
-          <ul class="feat mt8">
-            <li><strong>Sector Impact:</strong> Revolutionizes SME and NBFC lending lines allowing faster scale.</li>
-            <li><strong>Cost Savings:</strong> Massive reduction in operational overhead eliminating manual appraisal
-              loops.</li>
-            <li><strong>Time Reduction:</strong> Over 99% reduction in CAM compilation (from 6 days down to ~3 minutes).
-            </li>
-            <li><strong>Risk Deflection:</strong> Reduces NPA leakage strictly by uncovering shadow contagion and
-              forensic tampering.</li>
-          </ul>
-        </div>
-        <div class="col card center">
-          <h3 class="accent2">Measurable KPIs</h3>
-          <div class="mt16 highlight-metric" style="font-size:2.5rem; color:#00D4AA; font-weight:900;">10,000x</div>
-          <p class="muted">Faster Data Parsing compared to baseline underwriting checks</p>
-
-          <div class="mt24 highlight-metric" style="font-size:2.5rem; color:#F59E0B; font-weight:900;">11</div>
-          <p class="muted">First-in-Class Integrated AI innovations inside one execution logic.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 13: Results & Performance Analysis -->
-    <div class="slide bg-navy" id="s13">
-      <div class="subtitle-bar">
-        <h2><span class="accent">Results & Performance Analysis</span></h2>
-      </div>
-      <div class="card full-w">
-        <h3 class="center mb8">Yakṣarāja System Advantage</h3>
-        <table class="mt16">
-          <thead>
-            <tr>
-              <th>Evaluator</th>
-              <th>Yakṣarāja Response</th>
-              <th>Traditional Model Response</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Overall Processing Speed</td>
-              <td class="green">~ 3 Runtime Minutes</td>
-              <td class="red">> 100 Hours</td>
-            </tr>
-            <tr>
-              <td>False Positive Detection Ratio</td>
-              <td class="green">Virtually Negligible (Ensemble Handled)</td>
-              <td class="red">Highly susceptible to single-factor errors</td>
-            </tr>
-            <tr>
-              <td>Evaluation Positioning</td>
-              <td class="green">Future-proof, highly dynamic stress constraints</td>
-              <td class="red">Static, reactive matrices</td>
-            </tr>
-            <tr>
-              <td>Data Interpretation Limits</td>
-              <td class="green">Massively Parallel (Includes imagery/text/matrices)</td>
-              <td class="red">Only Structured Ledgers</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="mt24 muted center">The framework has executed seamlessly on 75 passing test benchmarks and handles
-          quantum-scale data inferences securely without systemic hallucination errors.</p>
-      </div>
-    </div>
-
-    <!-- SLIDE 14: References -->
-    <div class="slide bg-deep" id="s14">
-      <div class="subtitle-bar">
-        <h2><span class="accent2">References</span></h2>
-      </div>
-      <div class="card full-w mt16">
-        <ul class="feat" style="font-size:1rem; line-height:2;">
-          <li><strong class="white">Reserve Bank of India (RBI)</strong> — Default and historical NPA statistics
-            baseline datasets.</li>
-          <li><strong class="white">Addo, P.M., et al. (2018)</strong> — "Credit risk analysis using ML and DL models."
-          </li>
-          <li><strong class="white">Beneish, M.D. (1999)</strong> — "The detection of earnings manipulation."</li>
-          <li><strong class="white">Altman, E.I. (1968)</strong> — Discriminant analysis and bankruptcy prediction.</li>
-          <li><strong class="white">Copernicus Agency</strong> — Sentinel-2 Global satellite imaging documentation.</li>
-          <li><strong class="white">Mitchell, et al. (LangChain 2024)</strong> — Deploying Multi-Agent LLM
-            Orchestrations securely.</li>
-        </ul>
-        <p class="center mt24 accent" style="font-style:italic; font-size:1.4rem;">
-          "Our infrastructure correlates reality, not just statements." <br> <span class="white"
-            style="font-size:1rem;">~ Team Shadow Bytes ~</span>
-        </p>
-      </div>
-    </div>
-
-    <!-- Progress and Navigation -->
-    <div class="progress-bar" id="progress"></div>
-    <div class="slide-counter" id="counter">1 / 14</div>
-    <div class="nav">
-      <button id="btn-prev">◀ Prev</button>
-      <button id="btn-next">Next ▶</button>
-    </div>
-
+    <p class="muted small mt16">From raw financials → print-ready DOCX in one pipeline call &nbsp;|&nbsp; 10-Layer Engine &nbsp;|&nbsp; 3-Model Ensemble</p>
   </div>
+</div>
 
-  <script>
-    const slides = document.querySelectorAll('.slide');
-    const progress = document.getElementById('progress');
-    const counter = document.getElementById('counter');
-    let currentSlide = 0;
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 2 — CORE ALGORITHMS
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-deep" id="s2">
+  <div class="subtitle-bar">
+    <h2><span class="accent">Core</span> Algorithms</h2>
+    <span class="tag tag-teal">ML + Statistical Models</span>
+  </div>
+  <div class="row full-w" style="gap:16px;">
+    <!-- Left column -->
+    <div class="col">
+      <div class="card mb16">
+        <h3>🎯 3-Model Ensemble Credit Scorer</h3>
+        <p class="mt8">Weighted ensemble: <strong class="white">XGBoost 50%</strong> + <strong class="white">LightGBM 30%</strong> + <strong class="white">Random Forest 20%</strong></p>
+        <ul class="feat mt8">
+          <li>SMOTE oversampling (sampling_strategy=0.5)</li>
+          <li>Temporal train/test split (FY≤2017 / FY&gt;2017)</li>
+          <li>Model Disagreement Signal: flags &gt;0.30 spread as HIGH_UNCERTAINTY</li>
+          <li>SHAP TreeExplainer for feature attribution</li>
+        </ul>
+        <p class="small muted mt8">Ref: Addo et al. 2018 — "Credit risk analysis using ML and DL models"</p>
+      </div>
+      <div class="card">
+        <h3>📊 Forensic Scoring Suite</h3>
+        <ul class="feat mt8">
+          <li><strong class="white">Beneish M-Score</strong> — 8-ratio earnings manipulation detector (threshold &gt;−2.22)</li>
+          <li><strong class="white">Altman Z-Score</strong> — 5-factor bankruptcy predictor (zones: Safe/Grey/Danger)</li>
+          <li><strong class="white">Piotroski F-Score</strong> — 9-component financial strength (0–9 scale)</li>
+        </ul>
+      </div>
+    </div>
+    <!-- Right column -->
+    <div class="col">
+      <div class="card mb16">
+        <h3>🧬 Default DNA Fingerprinting</h3>
+        <p class="mt8">Matches borrower trajectory against <strong class="white">6 historical default archetypes</strong>: IL&FS, Kingfisher, DHFL, Café Coffee Day, Bhushan Steel, Jet Airways</p>
+        <p class="mt8"><span class="red">DNA Match = 62%</span> similar to Jet Airways</p>
+        <ul class="feat mt8">
+          <li>Velocity feature comparison (DSCR, D/E, margin slopes)</li>
+          <li>30 companies × 12 fiscal years calibration set</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🎲 Monte Carlo Stress Test</h3>
+        <p class="mt8"><strong class="white">1,000 simulations</strong> across 5 RBI-calibrated macro shocks:</p>
+        <ul class="feat mt8">
+          <li>Repo Rate σ=1.5pp, Inflation σ=2.0pp, Revenue σ=15%</li>
+          <li>Commodity Price σ=20%, Customer Default U(0,0.30)</li>
+          <li>3-year forward DSCR projection with compounding</li>
+          <li>Outputs: P10/P50/P90, Default Prob, Covenant Trigger</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
 
-    function updateSlide(index) {
-      slides.forEach((s, i) => {
-        if (i === index) { s.classList.add('active'); s.style.zIndex = 10; }
-        else { s.classList.remove('active'); s.style.zIndex = 1; }
-      });
-      progress.style.width = ((index + 1) / slides.length) * 100 + '%';
-      counter.innerText = (index + 1) + ' / ' + slides.length;
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 3 — TECHNICAL STACK
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-accent" id="s3">
+  <div class="subtitle-bar">
+    <h2><span class="accent2">Technical</span> Stack</h2>
+    <span class="tag tag-indigo">Libraries &amp; Frameworks</span>
+  </div>
+  <div class="row full-w" style="gap:16px;">
+    <div class="col">
+      <div class="card mb16">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div class="icon-circle ic-teal">⚙️</div>
+          <h3 style="margin:0;">ML / Deep Learning</h3>
+        </div>
+        <table>
+          <tr><td>XGBoost</td><td class="muted">Primary ensemble model (300 trees, depth 6)</td></tr>
+          <tr><td>LightGBM</td><td class="muted">Tertiary model (300 rounds, 31 leaves)</td></tr>
+          <tr><td>scikit-learn</td><td class="muted">RandomForest, StandardScaler, metrics</td></tr>
+          <tr><td>PyTorch</td><td class="muted">LSTM trajectory model (3-yr prediction)</td></tr>
+          <tr><td>SHAP</td><td class="muted">TreeExplainer for feature attribution</td></tr>
+          <tr><td>imbalanced-learn</td><td class="muted">SMOTE for class balancing</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div class="icon-circle ic-indigo">🤖</div>
+          <h3 style="margin:0;">LLM &amp; NLP</h3>
+        </div>
+        <table>
+          <tr><td>Claude (Anthropic)</td><td class="muted">Bull/Bear adversarial agents</td></tr>
+          <tr><td>LangGraph / LangChain</td><td class="muted">State-machine agent orchestration</td></tr>
+          <tr><td>Whisper (OpenAI)</td><td class="muted">CEO interview transcription</td></tr>
+          <tr><td>VADER Sentiment</td><td class="muted">Interview sentiment scoring</td></tr>
+          <tr><td>Tavily API</td><td class="muted">Automated web research agent</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card mb16">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div class="icon-circle ic-amber">📡</div>
+          <h3 style="margin:0;">Data &amp; Graph</h3>
+        </div>
+        <table>
+          <tr><td>Pandas / NumPy</td><td class="muted">Core data manipulation pipeline</td></tr>
+          <tr><td>NetworkX</td><td class="muted">Bipartite promoter-company graph</td></tr>
+          <tr><td>Sentinel-2 API</td><td class="muted">Satellite factory activity scoring</td></tr>
+        </table>
+      </div>
+      <div class="card mb16">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div class="icon-circle ic-green">📊</div>
+          <h3 style="margin:0;">Visualization &amp; Output</h3>
+        </div>
+        <table>
+          <tr><td>Plotly</td><td class="muted">Interactive network graphs</td></tr>
+          <tr><td>Matplotlib</td><td class="muted">Stress distribution charts</td></tr>
+          <tr><td>Streamlit</td><td class="muted">4-page dashboard (dark theme)</td></tr>
+          <tr><td>python-docx</td><td class="muted">11-section CAM DOCX generation</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div class="icon-circle ic-red">🧪</div>
+          <h3 style="margin:0;">Testing</h3>
+        </div>
+        <table>
+          <tr><td>pytest</td><td class="muted">75 passed, 15 skipped, 1 xfailed</td></tr>
+          <tr><td>Mocked LLM APIs</td><td class="muted">Runs without API keys</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 4 — IMPLEMENTATION DETAILS
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-dark" id="s4">
+  <div class="subtitle-bar">
+    <h2><span class="orange">Implementation</span> Details</h2>
+    <span class="tag tag-amber">Code &amp; Data</span>
+  </div>
+  <div class="row full-w" style="gap:16px;">
+    <div class="col">
+      <div class="card mb16">
+        <h3>🗂️ Dataset Generation — <code>data_generator.py</code></h3>
+        <ul class="feat mt8">
+          <li><strong class="white">40 Indian companies</strong> (15 defaulted + 15 healthy + synthetics)</li>
+          <li>FY2009–FY2024 time series, <strong class="white">146 features</strong> per row</li>
+          <li>Calibrated from <strong class="accent">RBI NPA statistics</strong> with sector-specific rates</li>
+          <li>Deterioration factor (0→1) simulates gradual pre-default decline</li>
+          <li>Includes: P&L, Balance Sheet, Cash Flow, Governance, Auditor, Network, Satellite, GST, CEO sentiment</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🧮 Feature Engineering — <code>feature_engineering.py</code></h3>
+        <ul class="feat mt8">
+          <li><strong class="white">29 financial ratios</strong>: D/E, ICR, DSCR, Current Ratio, CCC, ROE, ROA, ln-transforms</li>
+          <li><strong class="white">Velocity features</strong>: YoY growth, ratio changes, DSCR acceleration, 3-yr slopes</li>
+          <li><strong class="white">Beneish M-Score</strong>: 8 components (DSRI, GMI, AQI, SGI, DEPI, SGAI, LVGI, TATA)</li>
+          <li><strong class="white">Altman Z-Score</strong>: 5 working-capital ratios → Safe/Grey/Danger zones</li>
+          <li><strong class="white">Piotroski F-Score</strong>: 9 binary signals → 0–9 financial strength</li>
+        </ul>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card mb16">
+        <h3>🏦 Credit Scoring — <code>credit_scorer.py</code></h3>
+        <ul class="feat mt8">
+          <li><strong class="accent">Temporal split</strong>: train FY≤2017, test FY&gt;2017 (no data leakage)</li>
+          <li>SMOTE when minority &lt; 50% majority</li>
+          <li>XGBoost: 300 estimators, early stopping (30 rounds), AUC eval metric</li>
+          <li>Ensemble outputs: <code>pd_ensemble</code>, <code>lending_decision</code>, <code>credit_limit_cr</code>, <code>risk_premium_pct</code></li>
+          <li>Decision logic: PD&lt;0.35 → APPROVE, 0.35–0.60 → REVIEW, &gt;0.60 → REJECT</li>
+        </ul>
+      </div>
+      <div class="card mb16">
+        <h3>🔗 Network Contagion — <code>network_graph.py</code></h3>
+        <ul class="feat mt8">
+          <li>Synthetic MCA21 data: <strong class="white">500 directors × 1000 companies × 2500 linkages</strong></li>
+          <li>NetworkX bipartite graph → promoter subgraph extraction</li>
+          <li>Contagion Score = <code>0.4×NPA_ratio + 0.3×clustering + 0.3×size_factor</code></li>
+          <li>Risk levels: LOW (&lt;0.25), MEDIUM (0.25–0.50), HIGH (&gt;0.50)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>📄 CAM Generator — <code>cam_generator.py</code></h3>
+        <ul class="feat mt8">
+          <li><strong class="white">11-section DOCX</strong> with Vivriti-branded styling</li>
+          <li>Consistency validation rules (DSCR&lt;1→REJECT, PD&gt;40%→REJECT)</li>
+          <li>Auto risk badges, color-coded tables, SHAP explainability charts</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 5 — SYSTEM ARCHITECTURE
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-navy" id="s5">
+  <div class="subtitle-bar">
+    <h2><span class="accent">System</span> Architecture</h2>
+    <span class="tag tag-teal">3-Person Modular Design</span>
+  </div>
+  <div style="width:100%;max-width:960px;margin:0 auto;">
+    <!-- Top: 3 modules -->
+    <div class="row" style="gap:14px;">
+      <div class="arch-box col" style="border-color:rgba(0,212,170,0.25);">
+        <div class="tag tag-teal mb8">PERSON 1</div>
+        <h3 class="accent" style="font-size:1rem;">ML Core</h3>
+        <ul><li><code>data_generator.py</code></li><li><code>feature_engineering.py</code></li><li><code>credit_scorer.py</code></li><li><code>temporal_model.py</code></li><li><code>forensics.py</code></li></ul>
+        <p class="small muted mt8">146 features · 3-model ensemble · LSTM trajectory · Beneish/Altman/Piotroski</p>
+      </div>
+      <div class="arch-box col" style="border-color:rgba(99,102,241,0.25);">
+        <div class="tag tag-indigo mb8">PERSON 2</div>
+        <h3 class="accent2" style="font-size:1rem;">Alt Data + Graph</h3>
+        <ul><li><code>network_graph.py</code></li><li><code>stress_test.py</code></li><li><code>satellite_module.py</code></li><li><code>gst_intelligence.py</code></li><li><code>dna_matching.py</code></li></ul>
+        <p class="small muted mt8">Promoter GNN · Monte Carlo · Sentinel-2 · GST Truth · Default DNA</p>
+      </div>
+      <div class="arch-box col" style="border-color:rgba(245,158,11,0.25);">
+        <div class="tag tag-amber mb8">PERSON 3</div>
+        <h3 class="orange" style="font-size:1rem;">LLM + CAM</h3>
+        <ul><li><code>research_agent.py</code></li><li><code>approval_agent.py</code></li><li><code>dissent_agent.py</code></li><li><code>ceo_interview.py</code></li><li><code>cam_generator.py</code></li></ul>
+        <p class="small muted mt8">Tavily research · Bull/Bear debate · Whisper+VADER · 11-section DOCX</p>
+      </div>
+    </div>
+    <!-- Arrow -->
+    <div class="arch-connector">▼ &nbsp; ▼ &nbsp; ▼</div>
+    <!-- Pipeline -->
+    <div class="arch-box" style="border-color:rgba(0,212,170,0.3);background:rgba(0,212,170,0.04);">
+      <h3 class="accent" style="font-size:1.1rem;">pipeline/main_pipeline.py — 10-Layer Engine</h3>
+      <p class="small" style="color:#94A3B8;">Forensics → Feature Eng → ML Scoring → LSTM → Network → Satellite → GST → Stress Test → DNA Match → LLM Agents + CAM</p>
+    </div>
+    <div class="arch-connector">▼</div>
+    <!-- Outputs -->
+    <div class="row" style="gap:14px;">
+      <div class="arch-box col" style="border-color:rgba(16,185,129,0.2);">
+        <h3 class="green" style="font-size:0.95rem;">📄 CAM DOCX</h3>
+        <p class="small muted">11-section credit memo</p>
+      </div>
+      <div class="arch-box col" style="border-color:rgba(16,185,129,0.2);">
+        <h3 class="green" style="font-size:0.95rem;">📊 Scores JSON</h3>
+        <p class="small muted">PD, SHAP, limits, risk</p>
+      </div>
+      <div class="arch-box col" style="border-color:rgba(16,185,129,0.2);">
+        <h3 class="green" style="font-size:0.95rem;">🔗 Network Graph</h3>
+        <p class="small muted">Interactive Plotly HTML</p>
+      </div>
+      <div class="arch-box col" style="border-color:rgba(16,185,129,0.2);">
+        <h3 class="green" style="font-size:0.95rem;">📈 Stress Chart</h3>
+        <p class="small muted">DSCR distribution PNG</p>
+      </div>
+    </div>
+    <div class="arch-connector">▼</div>
+    <div class="row" style="gap:14px;">
+      <div class="arch-box col" style="border-color:rgba(99,102,241,0.2);">
+        <h3 class="accent2" style="font-size:0.95rem;">🖥️ Streamlit Dashboard</h3>
+        <p class="small muted">4-page UI: Upload → Decision → Deep Dive → Download</p>
+      </div>
+      <div class="arch-box col" style="border-color:rgba(99,102,241,0.2);">
+        <h3 class="accent2" style="font-size:0.95rem;">📓 Jupyter Notebook</h3>
+        <p class="small muted">27-cell interactive walkthrough</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 6 — FLOW DIAGRAM
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-deep" id="s6">
+  <div class="subtitle-bar">
+    <h2><span class="accent">Flow</span> Diagram</h2>
+    <span class="tag tag-teal">10-Layer Pipeline</span>
+  </div>
+  <div class="row full-w" style="gap:20px;">
+    <div class="col">
+      <div class="flow-step"><div class="flow-num" style="background:rgba(0,212,170,0.2);color:#00D4AA;">1</div><div><strong class="white">Forensic Analysis</strong><br><span class="muted small">Beneish M-Score, Altman Z, Piotroski F</span></div></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step"><div class="flow-num" style="background:rgba(0,212,170,0.2);color:#00D4AA;">2</div><div><strong class="white">Feature Engineering</strong><br><span class="muted small">Raw → 146 features (ratios, velocities, slopes)</span></div></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step"><div class="flow-num" style="background:rgba(0,212,170,0.2);color:#00D4AA;">3</div><div><strong class="white">ML Credit Scoring</strong><br><span class="muted small">XGB+LGB+RF ensemble → PD = <strong class="red">42%</strong></span></div></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step"><div class="flow-num" style="background:rgba(99,102,241,0.2);color:#818CF8;">4</div><div><strong class="white">LSTM Trajectory</strong><br><span class="muted small">3-year prediction, DSCR velocity = <strong class="red">−0.18/yr</strong></span></div></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step"><div class="flow-num" style="background:rgba(99,102,241,0.2);color:#818CF8;">5</div><div><strong class="white">Promoter Network</strong><br><span class="muted small">MCA21 bipartite graph → contagion risk score</span></div></div>
+    </div>
+    <div class="col">
+      <div class="flow-step"><div class="flow-num" style="background:rgba(99,102,241,0.2);color:#818CF8;">6</div><div><strong class="white">Satellite Verification</strong><br><span class="muted small">Sentinel-2 factory activity vs reported utilization</span></div></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step"><div class="flow-num" style="background:rgba(99,102,241,0.2);color:#818CF8;">7</div><div><strong class="white">GST Intelligence</strong><br><span class="muted small">Filing vs bank revenue, divergence = <strong class="red">22%</strong></span></div></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step"><div class="flow-num" style="background:rgba(245,158,11,0.2);color:#F59E0B;">8</div><div><strong class="white">Monte Carlo Stress Test</strong><br><span class="muted small">1,000 sims → P10/P50/P90, covenant trigger = <strong class="red">94%</strong> breach</span></div></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step"><div class="flow-num" style="background:rgba(245,158,11,0.2);color:#F59E0B;">9</div><div><strong class="white">Default DNA Matching</strong><br><span class="muted small">6 archetypes → <strong class="red">62%</strong> match to Jet Airways</span></div></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step"><div class="flow-num" style="background:rgba(239,68,68,0.15);color:#EF4444;">10</div><div><strong class="white">LLM Agents + CAM</strong><br><span class="muted small">Research → Bull/Bear debate → 11-section DOCX</span></div></div>
+    </div>
+  </div>
+  <div class="card mt16 center full-w" style="background:rgba(0,212,170,0.05);border-color:rgba(0,212,170,0.2);">
+    <p class="white" style="font-size:0.88rem;">
+      <strong>Output:</strong> &nbsp; PD Ensemble = <span class="red">42%</span> &nbsp;→&nbsp; Limit = <span class="accent">₹10.5 Cr</span> at <span class="accent">12.75%</span> &nbsp;→&nbsp; Months to Danger = <span class="orange">14</span>
+    </p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 7 — INNOVATIONS
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-accent" id="s7">
+  <div class="subtitle-bar">
+    <h2><span class="green">11</span> Innovations</h2>
+    <span class="tag tag-green">All Implemented ✓</span>
+  </div>
+  <div class="inno-grid">
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-teal">1</span><strong class="white" style="font-size:0.84rem;">Beneish M-Score Forensics</strong></div>
+      <p class="small">8-ratio earnings manipulation detector. Validated on Satyam Computer.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-teal">2</span><strong class="white" style="font-size:0.84rem;">3-Model Ensemble Scorer</strong></div>
+      <p class="small">XGBoost + LightGBM + RF with SMOTE, SHAP explanations, temporal split.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-teal">3</span><strong class="white" style="font-size:0.84rem;">LSTM Trajectory Model</strong></div>
+      <p class="small">3-year financial trajectory prediction with early warning system.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-teal">4</span><strong class="white" style="font-size:0.84rem;">Model Disagreement Signal</strong></div>
+      <p class="small">Flags high-uncertainty credits when sub-models spread &gt; 0.30.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-indigo">5</span><strong class="white" style="font-size:0.84rem;">Promoter Network Contagion</strong></div>
+      <p class="small">MCA21 bipartite graph with NPA ratio, clustering coefficient, size factor.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-indigo">6</span><strong class="white" style="font-size:0.84rem;">Monte Carlo Stress Test</strong></div>
+      <p class="small">1,000 simulations across 5 macro shocks. 4 named scenarios + P10/P50/P90.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-indigo">7</span><strong class="white" style="font-size:0.84rem;">Sentinel-2 Satellite Scoring</strong></div>
+      <p class="small">Factory activity analysis vs reported utilization via satellite imagery.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-indigo">8</span><strong class="white" style="font-size:0.84rem;">GST Truth Layer</strong></div>
+      <p class="small">Cross-validates GST filings with bank-reported revenue. Divergence = 22%.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-indigo">9</span><strong class="white" style="font-size:0.84rem;">Default DNA Fingerprinting</strong></div>
+      <p class="small">6 historical archetypes. Sunrise matched 62% to Jet Airways trajectory.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-amber">10</span><strong class="white" style="font-size:0.84rem;">Adversarial Bull/Bear Agents</strong></div>
+      <p class="small">LangGraph-powered approval vs dissent agents debate the credit case.</p>
+    </div>
+    <div class="card card-sm">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-amber">11</span><strong class="white" style="font-size:0.84rem;">CEO Interview Sentiment</strong></div>
+      <p class="small">Whisper transcription + VADER sentiment + deflection/overconfidence scoring.</p>
+    </div>
+    <div class="card card-sm" style="border-color:rgba(0,212,170,0.2);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span class="tag tag-green">+</span><strong class="accent" style="font-size:0.84rem;">Bonus Innovations</strong></div>
+      <p class="small">Tavily Web Research Agent · 11-Section CAM DOCX · 4-Page Streamlit Dashboard · Velocity Features</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 8 — REAL WORLD IMPACT
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-dark" id="s8">
+  <div class="subtitle-bar">
+    <h2><span class="orange">Real-World</span> Impact</h2>
+    <span class="tag tag-amber">Banking &amp; NBFC Value</span>
+  </div>
+  <div class="row full-w" style="gap:16px;">
+    <div class="col">
+      <div class="card mb16">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div class="icon-circle ic-teal">⏱️</div>
+          <h3 style="margin:0;">Time Savings</h3>
+        </div>
+        <p>Traditional CAM preparation takes <strong class="white">5–7 days</strong> of analyst time. Intelli-Credit reduces this to <strong class="accent">minutes</strong> — one pipeline call generates the complete 11-section memo.</p>
+        <div class="metric teal mt16">
+          <div class="label">Processing Time</div>
+          <div class="value">~3 min</div>
+          <div class="sub">vs 5–7 days manual</div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div class="icon-circle ic-red">🛡️</div>
+          <h3 style="margin:0;">Early Warning Detection</h3>
+        </div>
+        <ul class="feat mt8">
+          <li><strong class="white">DSCR velocity = −0.18/yr</strong> → declining debt serviceability</li>
+          <li><strong class="white">Months to danger = 14</strong> → early alert before DSCR hits 1.0</li>
+          <li><strong class="white">Covenant breach = 94%</strong> of Monte Carlo paths breach covenant</li>
+          <li><strong class="white">DNA match = 62%</strong> to Jet Airways pre-default pattern</li>
+        </ul>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card mb16">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div class="icon-circle ic-indigo">🔍</div>
+          <h3 style="margin:0;">Fraud &amp; Manipulation Detection</h3>
+        </div>
+        <ul class="feat mt8">
+          <li><strong class="white">Beneish M-Score</strong> flags earnings manipulation — validated on Satyam (2009 fraud)</li>
+          <li><strong class="white">GST divergence = 22%</strong> reveals revenue inflation vs bank statements</li>
+          <li><strong class="white">Satellite verification</strong> cross-checks factory activity vs reported utilization</li>
+          <li><strong class="white">Promoter network contagion</strong> identifies hidden NPA-linked entities</li>
+        </ul>
+      </div>
+      <div class="card mb16">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div class="icon-circle ic-amber">⚖️</div>
+          <h3 style="margin:0;">Risk-Adjusted Pricing</h3>
+        </div>
+        <p>Dynamic credit limit and interest rate powered by PD score:</p>
+        <div class="row mt8" style="gap:10px;">
+          <div class="metric red-bar" style="flex:1;">
+            <div class="label">PD Ensemble</div>
+            <div class="value red">42%</div>
+          </div>
+          <div class="metric teal" style="flex:1;">
+            <div class="label">Limit</div>
+            <div class="value">₹10.5 Cr</div>
+          </div>
+          <div class="metric amber" style="flex:1;">
+            <div class="label">Rate</div>
+            <div class="value orange">12.75%</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div class="icon-circle ic-green">🤝</div>
+          <h3 style="margin:0;">Adversarial Decision Making</h3>
+        </div>
+        <p>Bull/Bear LLM agents ensure <strong class="white">balanced credit opinions</strong> — no single-analyst bias. Coordinator synthesizes final recommendation with explicit risk trade-offs.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 9 — RESULTS & ANALYSIS
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-navy" id="s9">
+  <div class="subtitle-bar">
+    <h2><span class="accent">Results</span> &amp; Analysis</h2>
+    <span class="tag tag-teal">Sunrise Textile Mills — Demo</span>
+  </div>
+  <div class="row full-w" style="gap:14px;margin-bottom:16px;">
+    <div class="metric red-bar" style="flex:1;">
+      <div class="label">PD Ensemble</div>
+      <div class="value red">42%</div>
+      <div class="sub">XGB 50% + LGB 30% + RF 20%</div>
+    </div>
+    <div class="metric teal" style="flex:1;">
+      <div class="label">Credit Limit</div>
+      <div class="value accent">₹10.5 Cr</div>
+      <div class="sub">Revenue × 0.25 × (1−PD) × DSCR factor</div>
+    </div>
+    <div class="metric amber" style="flex:1;">
+      <div class="label">Risk Premium</div>
+      <div class="value orange">12.75%</div>
+      <div class="sub">Base 2.5% + PD × 8.0%</div>
+    </div>
+    <div class="metric indigo" style="flex:1;">
+      <div class="label">DSCR Velocity</div>
+      <div class="value accent2">−0.18/yr</div>
+      <div class="sub">14 months to danger zone</div>
+    </div>
+  </div>
+  <div class="row full-w" style="gap:16px;">
+    <div class="col">
+      <div class="card">
+        <h3>📋 Key Risk Signals</h3>
+        <table class="mt8">
+          <thead><tr><th>Signal</th><th>Value</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr><td>DSCR Velocity</td><td class="white">−0.18 / year</td><td><span class="tag tag-red">DECLINING</span></td></tr>
+            <tr><td>Months to DSCR &lt; 1.0</td><td class="white">14 months</td><td><span class="tag tag-amber">WARNING</span></td></tr>
+            <tr><td>GST Divergence</td><td class="white">22%</td><td><span class="tag tag-red">FLAGGED</span></td></tr>
+            <tr><td>DNA Match (Jet Airways)</td><td class="white">62%</td><td><span class="tag tag-red">HIGH MATCH</span></td></tr>
+            <tr><td>Covenant Breach Probability</td><td class="white">94%</td><td><span class="tag tag-red">CRITICAL</span></td></tr>
+            <tr><td>Ensemble PD</td><td class="white">42%</td><td><span class="tag tag-red">REJECT</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card mb16">
+        <h3>📊 Monte Carlo Stress Results</h3>
+        <table class="mt8">
+          <thead><tr><th>Scenario</th><th>DSCR</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>Base Case (no shocks)</td><td class="white">0.96</td><td><span class="tag tag-amber">STRESS</span></td></tr>
+            <tr><td>RBI Rate Hike +200bps</td><td class="white">0.83</td><td><span class="tag tag-red">FAIL</span></td></tr>
+            <tr><td>Revenue Decline −20%</td><td class="white">0.51</td><td><span class="tag tag-red">FAIL</span></td></tr>
+            <tr><td>Cotton Price +30%</td><td class="white">0.72</td><td><span class="tag tag-red">FAIL</span></td></tr>
+            <tr><td>Combined Adverse</td><td class="white">0.18</td><td><span class="tag tag-red">FAIL</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>🧪 Test Suite</h3>
+        <div class="row mt8" style="gap:10px;">
+          <div class="metric green-bar" style="flex:1;">
+            <div class="label">Passed</div>
+            <div class="value green">75</div>
+          </div>
+          <div class="metric amber" style="flex:1;">
+            <div class="label">Skipped</div>
+            <div class="value orange">15</div>
+          </div>
+          <div class="metric teal" style="flex:1;">
+            <div class="label">xfailed</div>
+            <div class="value">1</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 10 — REFERENCES
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide bg-deep" id="s10">
+  <div class="subtitle-bar">
+    <h2><span class="accent2">References</span></h2>
+    <span class="tag tag-indigo">Academic &amp; Institutional</span>
+  </div>
+  <div class="row full-w" style="gap:20px;">
+    <div class="col">
+      <div class="card mb16">
+        <h3>📚 Academic References</h3>
+        <table class="mt8">
+          <tbody>
+            <tr><td style="white-space:nowrap;color:#00D4AA;" width="30">[1]</td><td><strong class="white">Addo, P.M., Guegan, D., & Hassani, B. (2018)</strong> — "Credit risk analysis using machine and deep learning models." <span class="muted">Risks, 6(2), 38. Foundation for XGBoost+RF+LGB ensemble design and AUC/RMSE evaluation.</span></td></tr>
+            <tr><td style="color:#00D4AA;">[2]</td><td><strong class="white">Beneish, M.D. (1999)</strong> — "The detection of earnings manipulation." <span class="muted">Financial Analysts Journal. 8-ratio M-Score model for forensic analysis.</span></td></tr>
+            <tr><td style="color:#00D4AA;">[3]</td><td><strong class="white">Altman, E.I. (1968)</strong> — "Financial ratios, discriminant analysis and the prediction of corporate bankruptcy." <span class="muted">Journal of Finance. 5-factor Z-Score model.</span></td></tr>
+            <tr><td style="color:#00D4AA;">[4]</td><td><strong class="white">Piotroski, J.D. (2000)</strong> — "Value investing: The use of historical financial statement information." <span class="muted">Journal of Accounting Research. 9-component F-Score.</span></td></tr>
+            <tr><td style="color:#00D4AA;">[5]</td><td><strong class="white">Lundberg, S.M. & Lee, S.I. (2017)</strong> — "A unified approach to interpreting model predictions." <span class="muted">NeurIPS. SHAP framework for model explainability.</span></td></tr>
+            <tr><td style="color:#00D4AA;">[6]</td><td><strong class="white">Chawla, N.V. et al. (2002)</strong> — "SMOTE: Synthetic Minority Over-sampling Technique." <span class="muted">JAIR. Class imbalance handling for credit scoring.</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card mb16">
+        <h3>🏛️ Institutional Data Sources</h3>
+        <table class="mt8">
+          <tbody>
+            <tr><td style="color:#6366F1;" width="30">[7]</td><td><strong class="white">Reserve Bank of India (RBI)</strong> — <span class="muted">NPA statistics (2015–2024), repo rate history, sector-wise stress calibration for Monte Carlo shock distributions.</span></td></tr>
+            <tr><td style="color:#6366F1;">[8]</td><td><strong class="white">Ministry of Corporate Affairs (MCA21)</strong> — <span class="muted">Director-company linkage data structure. DIN-CIN mapping for promoter network graph construction.</span></td></tr>
+            <tr><td style="color:#6366F1;">[9]</td><td><strong class="white">GST Network (GSTN)</strong> — <span class="muted">Filing pattern schema for GST intelligence cross-validation layer.</span></td></tr>
+            <tr><td style="color:#6366F1;">[10]</td><td><strong class="white">Copernicus Sentinel-2</strong> — <span class="muted">ESA satellite imagery for factory activity verification module.</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>🛠️ Key Frameworks &amp; Libraries</h3>
+        <table class="mt8">
+          <tbody>
+            <tr><td style="color:#F59E0B;" width="30">[11]</td><td><strong class="white">XGBoost</strong> — Chen & Guestrin (2016). <span class="muted">KDD. Gradient boosted trees.</span></td></tr>
+            <tr><td style="color:#F59E0B;">[12]</td><td><strong class="white">LightGBM</strong> — Ke et al. (2017). <span class="muted">NeurIPS. Gradient boosting with GOSS + EFB.</span></td></tr>
+            <tr><td style="color:#F59E0B;">[13]</td><td><strong class="white">LangGraph</strong> — LangChain (2024). <span class="muted">State-machine orchestration for LLM agent workflows.</span></td></tr>
+            <tr><td style="color:#F59E0B;">[14]</td><td><strong class="white">NetworkX</strong> — Hagberg et al. (2008). <span class="muted">Graph analysis for bipartite promoter networks.</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="card mt16 center full-w" style="background:rgba(0,212,170,0.04);border-color:rgba(0,212,170,0.15);">
+    <p style="color:#CBD5E1;font-size:0.88rem;">
+      <strong class="accent">Intelli-Credit</strong> &nbsp;—&nbsp; Built for the <strong class="white">Vivriti Capital AI/ML Hackathon</strong>
+      &nbsp;|&nbsp; <span class="muted">3,745 lines of code · 146 features · 40 companies · 11 innovations</span>
+    </p>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<!-- ── PROGRESS BAR ──────────────────────────────────────────── -->
+<div class="progress-bar" id="progress" style="width:10%;"></div>
+
+<!-- ── SLIDE COUNTER ─────────────────────────────────────────── -->
+<div class="slide-counter" id="counter">1 / 10</div>
+
+<!-- ── NAV BUTTONS ───────────────────────────────────────────── -->
+<div class="nav">
+  <button onclick="go(-1)">← Prev</button>
+  <button onclick="go(1)">Next →</button>
+</div>
+
+<script>
+(function(){
+  var current = 0;
+  var slides = document.querySelectorAll('.slide');
+  var total = slides.length;
+  var bar = document.getElementById('progress');
+  var counter = document.getElementById('counter');
+
+  function show(idx){
+    slides.forEach(function(s){ s.classList.remove('active'); });
+    slides[idx].classList.add('active');
+    bar.style.width = ((idx+1)/total*100)+'%';
+    counter.textContent = (idx+1)+' / '+total;
+  }
+
+  window.go = function(d){
+    current = Math.max(0, Math.min(total-1, current+d));
+    show(current);
+  };
+
+  document.addEventListener('keydown', function(e){
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='Enter') { e.preventDefault(); go(1); }
+    if(e.key==='ArrowLeft'||e.key==='Backspace') { e.preventDefault(); go(-1); }
+    if(e.key==='Home') { e.preventDefault(); current=0; show(0); }
+    if(e.key==='End') { e.preventDefault(); current=total-1; show(current); }
+    // Number keys 1-9, 0=10
+    var num = parseInt(e.key);
+    if(!isNaN(num)){
+      var target = num === 0 ? 9 : num - 1;
+      if(target < total){ current = target; show(current); }
     }
+  });
 
-    document.getElementById('btn-next').addEventListener('click', () => {
-      if (currentSlide < slides.length - 1) { currentSlide++; updateSlide(currentSlide); }
-    });
-    document.getElementById('btn-prev').addEventListener('click', () => {
-      if (currentSlide > 0) { currentSlide--; updateSlide(currentSlide); }
-    });
+  // Touch/swipe support
+  var touchStartX = 0;
+  document.addEventListener('touchstart', function(e){ touchStartX = e.changedTouches[0].screenX; });
+  document.addEventListener('touchend', function(e){
+    var diff = e.changedTouches[0].screenX - touchStartX;
+    if(Math.abs(diff) > 50){
+      if(diff < 0) go(1); else go(-1);
+    }
+  });
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowRight' || e.key === 'Space') {
-        if (currentSlide < slides.length - 1) { currentSlide++; updateSlide(currentSlide); }
-      } else if (e.key === 'ArrowLeft') {
-        if (currentSlide > 0) { currentSlide--; updateSlide(currentSlide); }
-      }
-    });
+  show(0);
+})();
+</script>
 
-    updateSlide(0);
-  </script>
 </body>
-
 </html>

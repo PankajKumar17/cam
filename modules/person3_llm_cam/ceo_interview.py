@@ -48,11 +48,11 @@ except ImportError:
     VADER_AVAILABLE = False
 
 try:
-    import anthropic
-    ANTHROPIC_AVAILABLE = True
+    from google import genai
+    GEMINI_AVAILABLE = True
 except ImportError:
-    logger.warning("anthropic not installed — deflection detection will use heuristic")
-    ANTHROPIC_AVAILABLE = False
+    logger.warning("google-genai not installed — deflection detection will use heuristic")
+    GEMINI_AVAILABLE = False
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -194,8 +194,8 @@ def _segment_by_claude(transcript: str) -> Dict[str, str]:
     Use Claude to intelligently segment the transcript by topic.
     Falls back to keyword segmentation on failure.
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or not ANTHROPIC_AVAILABLE:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or not GEMINI_AVAILABLE:
         return _segment_by_keywords(transcript)
 
     prompt = f"""You are analyzing a CEO interview transcript. Segment the text by topic.
@@ -217,25 +217,32 @@ set its value to an empty string "".
 
 Return ONLY valid JSON, no other text."""
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = response.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        parsed = json.loads(text)
-        # Ensure all topics are present
-        for topic in TOPICS:
-            if topic not in parsed:
-                parsed[topic] = ""
-        return parsed
-    except Exception as e:
-        logger.warning(f"Claude segmentation failed: {e} — using keyword fallback")
-        return _segment_by_keywords(transcript)
+    _max_retries = 3
+    for _attempt in range(1, _max_retries + 1):
+        try:
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-3.1-flash-lite-preview",
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(max_output_tokens=2048),
+            )
+            text = response.text.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            parsed = json.loads(text)
+            for topic in TOPICS:
+                if topic not in parsed:
+                    parsed[topic] = ""
+            return parsed
+        except Exception as e:
+            err = str(e).lower()
+            if "429" in err or "quota" in err or "resource exhausted" in err:
+                logger.warning(f"Rate limit hit for segmentation (attempt {_attempt}/{_max_retries}) — waiting 60s...")
+                time.sleep(60)
+            else:
+                logger.warning(f"Gemini segmentation failed: {e} — using keyword fallback")
+                return _segment_by_keywords(transcript)
+    return _segment_by_keywords(transcript)
 
 
 def segment_transcript(transcript: str) -> Dict[str, str]:
@@ -309,8 +316,8 @@ def _detect_deflection_claude(topic: str, text: str) -> str:
 
     Returns: "DIRECT" | "PARTIAL" | "DEFLECTED"
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or not ANTHROPIC_AVAILABLE or not text.strip():
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or not GEMINI_AVAILABLE or not text.strip():
         return _detect_deflection_heuristic(topic, text)
 
     prompt = f"""You are analyzing a CEO interview. The CEO was asked about: {topic.replace('_', ' ')}.
@@ -325,20 +332,28 @@ Classify the response as:
 
 Return ONLY one word: DIRECT, PARTIAL, or DEFLECTED."""
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=20,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        answer = response.content[0].text.strip().upper()
-        if answer in ("DIRECT", "PARTIAL", "DEFLECTED"):
-            return answer
-        return "PARTIAL"
-    except Exception as e:
-        logger.warning(f"Claude deflection detection failed for {topic}: {e}")
-        return _detect_deflection_heuristic(topic, text)
+    _max_retries = 3
+    for _attempt in range(1, _max_retries + 1):
+        try:
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-3.1-flash-lite-preview",
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(max_output_tokens=20),
+            )
+            answer = response.text.strip().upper()
+            if answer in ("DIRECT", "PARTIAL", "DEFLECTED"):
+                return answer
+            return "PARTIAL"
+        except Exception as e:
+            err = str(e).lower()
+            if "429" in err or "quota" in err or "resource exhausted" in err:
+                logger.warning(f"Rate limit hit for deflection detection (attempt {_attempt}/{_max_retries}) — waiting 60s...")
+                time.sleep(60)
+            else:
+                logger.warning(f"Gemini deflection detection failed for {topic}: {e}")
+                return _detect_deflection_heuristic(topic, text)
+    return _detect_deflection_heuristic(topic, text)
 
 
 def _detect_deflection_heuristic(topic: str, text: str) -> str:

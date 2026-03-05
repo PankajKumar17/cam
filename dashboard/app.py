@@ -36,6 +36,7 @@ if PROJECT_ROOT not in sys.path:
 
 from pipeline.main_pipeline import run_pipeline
 from pipeline.excel_parser import parse_screener_excel
+from modules.web_data_fetcher import fetch_missing_data, describe_fetched, _is_missing, FETCHABLE_FIELDS
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  BRAND PALETTE & CONSTANTS                                                ║
@@ -302,6 +303,44 @@ CUSTOM_CSS = f"""
         margin-top: 16px !important;
         margin-bottom: 8px !important;
         font-weight: 700 !important;
+    }}
+
+    /* ── Fetch panel ────────────────────────────────────────────── */
+    .fetch-panel {{
+        background: linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(0,212,170,0.08) 100%);
+        border: 1px solid rgba(99,102,241,0.25);
+        border-radius: 14px;
+        padding: 18px 22px;
+        margin: 12px 0;
+    }}
+    .fetch-result-row {{
+        display: flex;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid {BORDER};
+        font-size: 13px;
+    }}
+    .fetch-result-row:last-child {{ border-bottom: none; }}
+    .fetch-label {{
+        color: {TX_SECONDARY};
+        width: 220px;
+        flex-shrink: 0;
+        font-weight: 500;
+    }}
+    .fetch-value {{
+        color: {ACCENT};
+        font-weight: 700;
+    }}
+    .missing-badge {{
+        display: inline-block;
+        background: rgba(239,68,68,0.15);
+        border: 1px solid rgba(239,68,68,0.3);
+        color: #EF4444;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 6px;
+        margin-right: 4px;
     }}
 
     /* ── Download card ──────────────────────────────────────────── */
@@ -1047,13 +1086,11 @@ def _adapt_pipeline_results(results: dict) -> dict:
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
 st.set_page_config(
-    page_title="Yakṣarāja | AI Credit Decisioning",
-    page_icon="🏦",
+    page_title="Intelli-Credit | AI Credit Decisioning",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # Session state init
 if "results" not in st.session_state:
@@ -1062,7 +1099,29 @@ if "pipeline_done" not in st.session_state:
     st.session_state.pipeline_done = False
 if "cam_path" not in st.session_state:
     st.session_state.cam_path = None
+if "prefetched_data" not in st.session_state:
+    st.session_state.prefetched_data = {}
 
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  LANDING PAGE (shown before any analysis)                                   ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+if not st.session_state.pipeline_done:
+    from landing_v2 import render_landing
+    render_landing(
+        load_demo=_load_demo_data,
+        adapt_results=_adapt_pipeline_results,
+        run_pipeline_fn=run_pipeline,
+        parse_excel_fn=parse_screener_excel,
+        project_root=PROJECT_ROOT,
+    )
+    st.stop()
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  DASHBOARD — from here on only runs when analysis is loaded                 ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  SIDEBAR                                                                   ║
@@ -1182,6 +1241,167 @@ with st.sidebar:
 # ║  PAGE 1 — UPLOAD & PROCESS                                                ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+# ─────────────────────────────────────────────────────────────────────────────
+# WEB FETCH HELPER
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Governance fields that must come from the internet (not from uploaded financials)
+_GOV_FIELDS = [
+    "promoter_holding_pct",
+    "promoter_pledge_pct",
+    "institutional_holding_pct",
+    "public_holding_pct",
+    "related_party_tx_to_rev",
+    "sector",
+    "market_cap_cr",
+    "pe_ratio",
+    "pb_ratio",
+    "dividend_yield",
+]
+
+
+def _render_fetch_section(company_name: str = ""):
+    """
+    Render the 'Fetch from Internet' card.
+    - Before analysis: pre-fetch mode (no misleading missing-count).
+    - After analysis:  shows only truly missing governance fields.
+    """
+    analysis_loaded = st.session_state.pipeline_done and st.session_state.results
+    fin = _g(st.session_state.results, "financial_data", default={}) if analysis_loaded else {}
+
+    # Count only governance fields that are still missing in a loaded analysis
+    missing_gov = (
+        [f for f in _GOV_FIELDS if _is_missing(fin.get(f))]
+        if analysis_loaded else []
+    )
+    missing_count = len(missing_gov)
+
+    # Expander label
+    if not analysis_loaded:
+        expander_label = "🌐 Pre-fetch Company Data from Internet"
+        auto_expand = False
+    elif missing_count:
+        expander_label = f"🌐 Fetch Missing Governance Data  ({missing_count} field{'s' if missing_count != 1 else ''} missing)"
+        auto_expand = True
+    else:
+        expander_label = "🌐 Refresh / Enrich from Internet  (all governance fields present)"
+        auto_expand = False
+
+    with st.expander(expander_label, expanded=auto_expand):
+        st.markdown(
+            """
+            <div style='font-size:13px; color:#94A3B8; margin-bottom:12px;'>
+            Automatically fetches <b>promoter holding %</b>, <b>pledge %</b>,
+            <b>institutional holding</b>, <b>sector</b>, market ratios and other
+            governance data from
+            <b>Yahoo Finance</b> · <b>NSE India</b> · <b>Screener.in</b>.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Show pre-fetched cache if any
+        cached = st.session_state.get("prefetched_data", {})
+        if cached and not analysis_loaded:
+            rows = describe_fetched(cached)
+            html_rows = "".join(
+                f"<div class='fetch-result-row'>"
+                f"<span class='fetch-label'>{r['label']}</span>"
+                f"<span class='fetch-value'>{r['value']}</span>"
+                f"</div>"
+                for r in rows
+            )
+            st.markdown(
+                f"<div class='fetch-panel'>"
+                f"<p style='margin:0 0 10px 0; font-size:12px; font-weight:600; color:#F1F5F9;'>"
+                f"📦 {len(cached)} field(s) cached — will be merged when pipeline runs</p>"
+                f"{html_rows}</div>",
+                unsafe_allow_html=True,
+            )
+            if st.button("🗑 Clear cached data", key="clear_prefetch"):
+                st.session_state.prefetched_data = {}
+                st.rerun()
+
+        # Show missing fields badges
+        if missing_gov:
+            badges = " ".join(
+                f"<span class='missing-badge'>{f.replace('_', ' ').title()}</span>"
+                for f in missing_gov
+            )
+            st.markdown(
+                f"<p style='font-size:11px; margin:0 0 12px 0; color:#64748B;'>"
+                f"Missing: {badges}</p>",
+                unsafe_allow_html=True,
+            )
+
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            default_name = (
+                company_name
+                or _g(st.session_state.results or {}, "company_name", default="")
+            )
+            fetch_name = st.text_input(
+                "Company name or NSE ticker",
+                value=default_name,
+                placeholder="e.g. Tata Steel  or  TATASTEEL  or  SUNRISETEX",
+                key="fetch_company_name",
+                label_visibility="visible",
+            )
+        with c2:
+            st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
+            fetch_btn = st.button(
+                "🌐 Fetch Now",
+                type="primary",
+                width='stretch',
+                key="fetch_btn",
+                disabled=not fetch_name.strip(),
+            )
+
+        if fetch_btn and fetch_name.strip():
+            with st.spinner(f"Searching Yahoo Finance, NSE India, Screener.in for '{fetch_name}'…"):
+                existing = dict(fin)
+                fetched = fetch_missing_data(fetch_name.strip(), existing)
+
+            if fetched:
+                rows = describe_fetched(fetched)
+                html_rows = "".join(
+                    f"<div class='fetch-result-row'>"
+                    f"<span class='fetch-label'>{r['label']}</span>"
+                    f"<span class='fetch-value'>{r['value']}</span>"
+                    f"</div>"
+                    for r in rows
+                )
+                st.markdown(
+                    f"<div class='fetch-panel'>"
+                    f"<p style='margin:0 0 12px 0; font-size:13px; font-weight:700; color:#F1F5F9;'>"
+                    f"✅ Fetched {len(fetched)} field(s) successfully</p>"
+                    f"{html_rows}</div>",
+                    unsafe_allow_html=True,
+                )
+                if analysis_loaded:
+                    # Merge immediately into active analysis
+                    st.session_state.results.setdefault("financial_data", {})
+                    for k, v in fetched.items():
+                        st.session_state.results["financial_data"][k] = v
+                    if "company_data" in st.session_state.results:
+                        st.session_state.results["company_data"].update(fetched)
+                    st.success("✅ Data merged into current analysis. Re-open any tabs to see updates.")
+                    st.rerun()
+                else:
+                    # Cache for pipeline run
+                    st.session_state.prefetched_data.update(fetched)
+                    st.success(
+                        f"✅ {len(fetched)} field(s) cached — "
+                        "they will be merged automatically when you run the analysis."
+                    )
+            else:
+                st.warning(
+                    "⚠️ No data found. The company may be unlisted or private, "
+                    "or the data sources may be temporarily unavailable. "
+                    "Try using the exact NSE ticker symbol (e.g. TATASTEEL, WIPRO)."
+                )
+
+
 def page_upload():
     st.markdown(
         f'<div class="section-header">📤 Upload & Process New Application</div>',
@@ -1215,7 +1435,7 @@ def page_upload():
             run_btn = st.button(
                 "🚀 RUN FULL ANALYSIS",
                 type="primary",
-                use_container_width=True,
+                width='stretch',
                 disabled=not company_name or fin_file is None,
             )
             if company_name and fin_file is None:
@@ -1223,7 +1443,7 @@ def page_upload():
         with run_col2:
             demo_btn = st.button(
                 "⚡ Load Demo (Sunrise Textile)",
-                use_container_width=True,
+                width='stretch',
             )
 
     with col2:
@@ -1248,6 +1468,10 @@ def page_upload():
             """,
             unsafe_allow_html=True,
         )
+
+    # ── Fetch missing data from internet ────────────────────────────────
+    st.markdown("---")
+    _render_fetch_section(company_name=company_name or "")
 
     # ── Demo button ──────────────────────────────────────────────────────
     if demo_btn:
@@ -1277,6 +1501,12 @@ def page_upload():
 
             company_data_parsed = parse_screener_excel(tmp_path, company_name)
             progress.progress(0.10, text="✅ File parsed, starting pipeline...")
+
+            # Merge any pre-fetched internet data (promoter %, sector, etc.)
+            prefetched = st.session_state.get("prefetched_data", {})
+            if prefetched:
+                company_data_parsed.update(prefetched)
+                progress.progress(0.12, text=f"✅ Merged {len(prefetched)} pre-fetched field(s)...")
 
             # Run the real pipeline
             status.markdown(f"🚀 **Running 11-innovation pipeline for {company_name}...**")
@@ -1338,6 +1568,17 @@ def page_decision():
     fin = _g(data, "financial_data", default={})
 
     company = _g(data, "company_name")
+
+    # ── Missing governance data banner ──────────────────────────────────
+    missing_gov = [f for f in _GOV_FIELDS if _is_missing(fin.get(f))]
+    if missing_gov:
+        st.warning(
+            f"⚠️ **{len(missing_gov)} governance field(s) not provided** "
+            f"({', '.join(f.replace('_', ' ').title() for f in missing_gov[:4])}{'…' if len(missing_gov) > 4 else ''}). "
+            "Use the **Fetch from Internet** panel below to auto-fill from Yahoo Finance / NSE / Screener.in."
+        )
+    _render_fetch_section(company_name=str(company))
+
     st.markdown(
         f'<div class="section-header">📊 Credit Decision — {company}</div>',
         unsafe_allow_html=True,
@@ -1464,22 +1705,22 @@ def page_decision():
     with g1:
         st.plotly_chart(
             _gauge_chart(float(_g(ml, "xgb_pd", default=0)), "XGBoost PD", color="#1565C0"),
-            use_container_width=True,
+            width='stretch',
         )
     with g2:
         st.plotly_chart(
             _gauge_chart(float(_g(ml, "rf_pd", default=0)), "Random Forest PD", color="#2E7D32"),
-            use_container_width=True,
+            width='stretch',
         )
     with g3:
         st.plotly_chart(
             _gauge_chart(float(_g(ml, "lgb_pd", default=0)), "LightGBM PD", color="#E65100"),
-            use_container_width=True,
+            width='stretch',
         )
     with g4:
         st.plotly_chart(
             _gauge_chart(float(_g(ml, "ensemble_pd", default=0)), "Ensemble PD", color=NAVY),
-            use_container_width=True,
+            width='stretch',
         )
 
     # Disagreement flag
@@ -1601,7 +1842,7 @@ def page_deep_dive():
                 margin=dict(t=30, b=50, l=50, r=30),
                 font=dict(color=TX_SECONDARY),
             )
-            st.plotly_chart(fig_dscr, use_container_width=True)
+            st.plotly_chart(fig_dscr, width='stretch')
 
         with col_chart2:
             st.subheader("Beneish M-Score Components")
@@ -1640,7 +1881,7 @@ def page_deep_dive():
                 paper_bgcolor="rgba(0,0,0,0)",
                 font=dict(color=TX_PRIMARY),
             )
-            st.plotly_chart(fig_beneish, use_container_width=True)
+            st.plotly_chart(fig_beneish, width='stretch')
 
         # Revenue breakdown
         st.subheader("Financial Summary")
@@ -1727,7 +1968,7 @@ def page_deep_dive():
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(t=20, b=20, l=20, r=20),
             )
-            st.plotly_chart(fig_net, use_container_width=True)
+            st.plotly_chart(fig_net, width='stretch')
         else:
             st.info("Network graph data not available.")
 
@@ -1781,7 +2022,7 @@ def page_deep_dive():
                 margin=dict(t=30, b=50),
                 font=dict(color=TX_SECONDARY),
             )
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.plotly_chart(fig_hist, width='stretch')
 
         # Percentiles
         p_cols = st.columns(4)
@@ -1804,7 +2045,7 @@ def page_deep_dive():
             sc_df.columns = ["Scenario", "DSCR Under Stress", "PD Under Stress"]
             sc_df["DSCR Under Stress"] = sc_df["DSCR Under Stress"].apply(lambda x: f"{x:.2f}x")
             sc_df["PD Under Stress"] = sc_df["PD Under Stress"].apply(lambda x: f"{x*100:.1f}%")
-            st.dataframe(sc_df, use_container_width=True, hide_index=True)
+            st.dataframe(sc_df, width='stretch', hide_index=True)
 
             # Scenario bar chart
             sc_chart = pd.DataFrame(scenarios)
@@ -1828,7 +2069,7 @@ def page_deep_dive():
                 margin=dict(t=30, b=80),
                 font=dict(color=TX_SECONDARY),
             )
-            st.plotly_chart(fig_sc, use_container_width=True)
+            st.plotly_chart(fig_sc, width='stretch')
 
     # ── Tab 4: Bull vs Bear ─────────────────────────────────────────────
     with tab4:
@@ -1944,7 +2185,7 @@ def page_download():
             generate_btn = st.button(
                 "📝 Generate Full CAM Report",
                 type="primary",
-                use_container_width=True,
+                width='stretch',
             )
         with gen_col2:
             if st.session_state.cam_path and os.path.exists(st.session_state.cam_path):
@@ -1954,7 +2195,7 @@ def page_download():
                         data=f,
                         file_name=os.path.basename(st.session_state.cam_path),
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True,
+                        width='stretch',
                     )
 
         if generate_btn:
@@ -2033,7 +2274,7 @@ def page_download():
             data=json.dumps(json_summary, indent=2),
             file_name=f"scores_{str(company).replace(' ', '_')}.json",
             mime="application/json",
-            use_container_width=True,
+            width='stretch',
         )
 
 

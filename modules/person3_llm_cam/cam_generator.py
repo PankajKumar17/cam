@@ -1,15 +1,15 @@
-"""
-Yakṣarāja — CAM Document Generator (Person 3)
+﻿"""
+Yaká¹£arÄja €” CAM Document Generator (Person 3)
 =====================================================
 Assembles ALL outputs from Person 1 (ML Core) + Person 2 (Alt Data) +
 Person 3 (LLM Agents) into a professional Credit Appraisal Memo (CAM)
 as a DOCX file.
 
 Parts:
-  A — Data assembly from pipeline
-  B — 11 section-generator functions
-  C — DOCX assembly with professional styling
-  D — Save DOCX + summary JSON
+  A €” Data assembly from pipeline
+  B €” 11 section-generator functions
+  C €” DOCX assembly with professional styling
+  D €” Save DOCX + summary JSON
 
 Author: Person 3
 Module: modules/person3_llm_cam/cam_generator.py
@@ -33,13 +33,13 @@ try:
     from docx.oxml import parse_xml
     DOCX_AVAILABLE = True
 except ImportError:
-    logger.warning("python-docx not installed — CAM generation will be unavailable")
+    logger.warning("python-docx not installed €” CAM generation will be unavailable")
     DOCX_AVAILABLE = False
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  CONSTANTS & COLORS                                                       ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  CONSTANTS & COLORS                                                       •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 # Vivriti Capital inspired palette
 NAVY        = RGBColor(0x0A, 0x1F, 0x3C) if DOCX_AVAILABLE else None
@@ -57,11 +57,11 @@ HEADER_BG   = "0A1F3C"  # hex for XML shading
 ROW_ALT_BG  = "F5F5F5"
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  HELPER: SAFE DATA ACCESS                                                ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  HELPER: SAFE DATA ACCESS                                                •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
-def _g(data: dict, *keys, default="N/A"):
+def _g(data: dict, *keys, default="Not Given"):
     """Safely get nested values: _g(data, 'ml_scores', 'ensemble_pd', default=0)."""
     current = data
     for key in keys:
@@ -74,8 +74,8 @@ def _g(data: dict, *keys, default="N/A"):
 
 def _fmt(value, fmt=".2f", suffix="", prefix=""):
     """Format a numeric value safely."""
-    if value is None or value == "N/A":
-        return "N/A"
+    if value is None or value in ("N/A", "Not Given"):
+        return "Not Given"
     try:
         return f"{prefix}{value:{fmt}}{suffix}"
     except (ValueError, TypeError):
@@ -84,12 +84,17 @@ def _fmt(value, fmt=".2f", suffix="", prefix=""):
 
 def _pct(value, decimals=1):
     """Format as percentage."""
-    if value is None or value == "N/A":
-        return "N/A"
+    if value is None or value in ("N/A", "Not Given"):
+        return "Not Given"
     try:
         return f"{float(value) * 100:.{decimals}f}%"
     except (ValueError, TypeError):
         return str(value)
+
+
+def _not_given(val) -> bool:
+    """Return True if the value represents missing/not-given data."""
+    return val is None or val in ("N/A", "Not Given", "")
 
 
 def _risk_color(level: str):
@@ -103,15 +108,15 @@ def _risk_color(level: str):
         return GREEN
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  CONSISTENCY VALIDATION (Rules 4, 5, 6, 7)                                ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  CONSISTENCY VALIDATION (Rules 4, 5, 6, 7)                                •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def validate_cam_consistency(data: dict) -> list:
     """
     Validate CAM data for internal consistency before document assembly.
     Returns a list of warning/error dicts: {"rule": str, "level": str, "message": str}.
-    Also mutates data to enforce mandatory corrections (e.g., DSCR < 1.0 → REJECT).
+    Also mutates data to enforce mandatory corrections (e.g., DSCR < 1.0 †’ REJECT).
     """
     issues = []
     fin = data.get("financial_data", {})
@@ -124,12 +129,12 @@ def validate_cam_consistency(data: dict) -> list:
     decision = rec.get("lending_decision", ml.get("lending_decision", ""))
     cfo = fin.get("cfo")
 
-    # Rule 4a: DSCR < 1.0 → must be REJECT
+    # Rule 4a: DSCR < 1.0 †’ must be REJECT
     if dscr is not None and float(dscr) < 1.0 and decision != "REJECT":
         issues.append({
             "rule": "4a",
             "level": "CRITICAL",
-            "message": f"DSCR {dscr:.2f}x < 1.0 but decision is {decision} — forcing REJECT",
+            "message": f"DSCR {dscr:.2f}x < 1.0 but decision is {decision} €” forcing REJECT",
         })
         if isinstance(rec, dict):
             rec["lending_decision"] = "REJECT"
@@ -143,21 +148,21 @@ def validate_cam_consistency(data: dict) -> list:
             issues.append({
                 "rule": "4c",
                 "level": "WARNING",
-                "message": f"Gross margin {gross_margin:.1%} is negative but EBITDA margin {ebitda_margin:.1%} is positive — check data",
+                "message": f"Gross margin {gross_margin:.1%} is negative but EBITDA margin {ebitda_margin:.1%} is positive €” check data",
             })
 
-    # Rule 4e: PD > 40% → must be REJECT
+    # Rule 4e: PD > 40% †’ must be REJECT
     if pd_val is not None and float(pd_val) > 0.40 and decision != "REJECT":
         issues.append({
             "rule": "4e",
             "level": "CRITICAL",
-            "message": f"PD {pd_val:.2%} > 40% but decision is {decision} — forcing REJECT",
+            "message": f"PD {pd_val:.2%} > 40% but decision is {decision} €” forcing REJECT",
         })
         if isinstance(rec, dict):
             rec["lending_decision"] = "REJECT"
             rec["recommended_limit_cr"] = 0.0
 
-    # Rule 6: Strong positive CFO → no close default archetype
+    # Rule 6: Strong positive CFO †’ no close default archetype
     dna = data.get("dna_match", {})
     if cfo is not None and float(cfo) > 0:
         closest = dna.get("closest_default_archetype", "")
@@ -165,7 +170,7 @@ def validate_cam_consistency(data: dict) -> list:
             issues.append({
                 "rule": "6",
                 "level": "WARNING",
-                "message": f"CFO is positive (₹{cfo:.1f} Cr) but default archetype is '{closest}' — overriding to 'None (Healthy)'",
+                "message": f"CFO is positive (₹{cfo:.1f} Cr) but default archetype is '{closest}' €” overriding to 'None (Healthy)'",
             })
             dna["closest_default_archetype"] = "None (Healthy)"
 
@@ -175,7 +180,7 @@ def validate_cam_consistency(data: dict) -> list:
         issues.append({
             "rule": "7",
             "level": "INFO",
-            "message": "Promoter holding percentage not provided — will show as N/A",
+            "message": "Promoter holding percentage not provided €” will show as N/A",
         })
 
     # Log all issues
@@ -186,9 +191,9 @@ def validate_cam_consistency(data: dict) -> list:
     return issues
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  DOCX STYLING HELPERS                                                     ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  DOCX STYLING HELPERS                                                     •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def _set_cell_shading(cell, hex_color: str):
     """Apply background shading to a table cell."""
@@ -260,7 +265,7 @@ def _create_table(doc, headers: list, rows: list, col_widths: list = None):
     for r_idx, row_data in enumerate(rows):
         for c_idx, val in enumerate(row_data):
             cell = table.rows[r_idx + 1].cells[c_idx]
-            cell.text = str(val) if val is not None else "N/A"
+            cell.text = str(val) if val is not None else "Not Given"
             for para in cell.paragraphs:
                 for run in para.runs:
                     run.font.size = Pt(9)
@@ -278,10 +283,10 @@ def _create_table(doc, headers: list, rows: list, col_widths: list = None):
 
 
 def _add_risk_badge(doc, label: str, level: str):
-    """Add a colored risk indicator line: ● LABEL: LEVEL."""
+    """Add a colored risk indicator line: — LABEL: LEVEL."""
     color = _risk_color(level)
     para = doc.add_paragraph()
-    indicator = para.add_run("● ")
+    indicator = para.add_run("— ")
     indicator.font.color.rgb = color
     indicator.font.size = Pt(11)
     indicator.bold = True
@@ -300,9 +305,9 @@ def _add_page_break(doc):
     doc.add_page_break()
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 1 — COVER PAGE                                                  ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 1 €” COVER PAGE                                                  •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_cover_page(doc, data: dict):
     """Generate the CAM cover page with title, company, date, confidentiality."""
@@ -379,9 +384,9 @@ def generate_cover_page(doc, data: dict):
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 2 — EXECUTIVE SUMMARY                                           ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 2 €” EXECUTIVE SUMMARY                                           •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_executive_summary(doc, data: dict):
     """Decision, limit, rate, and key points at a glance."""
@@ -393,26 +398,26 @@ def generate_executive_summary(doc, data: dict):
 
     # Decision box
     decision = _g(rec, "lending_decision", default=_g(ml, "lending_decision", default="REVIEW"))
-    limit = _g(rec, "recommended_limit_cr", default="N/A")
-    rate = _g(rec, "recommended_rate_pct", default="N/A")
+    limit = _g(rec, "recommended_limit_cr", default="Not Given")
+    rate = _g(rec, "recommended_rate_pct", default="Not Given")
 
     _add_risk_badge(doc, "Lending Decision", decision)
-    _add_key_value(doc, "Recommended Credit Limit", f"₹{_fmt(limit)} Cr" if limit != "N/A" else "N/A")
-    _add_key_value(doc, "Recommended Interest Rate", f"{_fmt(rate)}%" if rate != "N/A" else "N/A")
+    _add_key_value(doc, "Recommended Credit Limit", f"₹{_fmt(limit)} Cr" if limit not in ("N/A", "Not Given") else "Not Given")
+    _add_key_value(doc, "Recommended Interest Rate", f"{_fmt(rate)}%" if rate not in ("N/A", "Not Given") else "Not Given")
     _add_key_value(doc, "Ensemble Probability of Default",
                    _pct(_g(ml, "ensemble_pd", default=_g(fin, "ensemble_pd"))))
-    _add_key_value(doc, "DSCR", _fmt(_g(fin, "dscr", default="N/A")))
+    _add_key_value(doc, "DSCR", _fmt(_g(fin, "dscr", default="Not Given")))
 
     # Key conditions
     conditions = _g(rec, "key_conditions", default=[])
     if conditions and isinstance(conditions, list):
         _add_para(doc, "Key Conditions:", bold=True, size=10, space_after=2)
         for cond in conditions:
-            _add_para(doc, f"  • {cond}", size=9, space_after=1)
+            _add_para(doc, f"  €¢ {cond}", size=9, space_after=1)
 
     # Final rationale
     rationale = _g(rec, "final_rationale", default="")
-    if rationale and rationale != "N/A":
+    if rationale and rationale not in ("N/A", "Not Given"):
         doc.add_paragraph("")
         _add_para(doc, "Rationale:", bold=True, size=10, space_after=2)
         _add_para(doc, str(rationale), size=10, italic=True, space_after=6)
@@ -420,9 +425,9 @@ def generate_executive_summary(doc, data: dict):
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 3 — COMPANY BACKGROUND                                          ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 3 €” COMPANY BACKGROUND                                          •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_company_background(doc, data: dict):
     """Sector, history, ownership structure."""
@@ -432,7 +437,7 @@ def generate_company_background(doc, data: dict):
     research = _g(data, "research", default={})
 
     _add_key_value(doc, "Company Name", _g(data, "company_name"))
-    _add_key_value(doc, "Sector", _g(fin, "sector", default=_g(data, "sector", default="N/A")))
+    _add_key_value(doc, "Sector", _g(fin, "sector", default=_g(data, "sector", default="Not Given")))
     _add_key_value(doc, "Fiscal Year Under Review", str(_g(data, "fiscal_year")))
     _add_key_value(doc, "Promoter Holding", _pct(_g(fin, "promoter_holding_pct")))
     _add_key_value(doc, "Promoter Pledge", _pct(_g(fin, "promoter_pledge_pct")))
@@ -440,19 +445,19 @@ def generate_company_background(doc, data: dict):
 
     # Research summary
     news = _g(research, "company_news_summary", default="")
-    if news and news != "N/A":
+    if news and news not in ("N/A", "Not Given"):
         _add_styled_heading(doc, "Industry & Market Context", level=2)
         _add_para(doc, str(news), size=10)
 
-    _add_key_value(doc, "Industry Outlook", _g(research, "industry_outlook", default="N/A"),
+    _add_key_value(doc, "Industry Outlook", _g(research, "industry_outlook", default="Not Given"),
                    color=_risk_color(_g(research, "industry_outlook", default="NEUTRAL")))
 
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 4 — FINANCIAL ANALYSIS                                           ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 4 €” FINANCIAL ANALYSIS                                           •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_financial_analysis(doc, data: dict):
     """5-year ratio tables and commentary."""
@@ -541,9 +546,9 @@ def generate_financial_analysis(doc, data: dict):
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 5 — FINANCIAL FORENSICS                                          ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 5 €” FINANCIAL FORENSICS                                          •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_forensics_section(doc, data: dict):
     """Beneish M-Score, Altman Z-Score, Piotroski F-Score, audit flags."""
@@ -558,15 +563,15 @@ def generate_forensics_section(doc, data: dict):
 
     # Beneish M-Score
     _add_styled_heading(doc, "Beneish M-Score (Earnings Manipulation)", level=2)
-    m_score = _g(forensics, "beneish_m_score", default=_g(fin, "beneish_m_score", default="N/A"))
-    m_flag = "SUSPICIOUS" if m_score != "N/A" and float(m_score) > -2.22 else "CLEAN"
+    m_score = _g(forensics, "beneish_m_score", default=_g(fin, "beneish_m_score", default="Not Given"))
+    m_flag = "SUSPICIOUS" if m_score not in ("N/A", "Not Given") and float(m_score) > -2.22 else "CLEAN"
     _add_risk_badge(doc, f"M-Score: {_fmt(m_score)}", m_flag)
     _add_para(doc, "Threshold: > -2.22 indicates potential manipulation (Beneish 1999).", size=9, color=GREY)
 
     # Altman Z-Score
     _add_styled_heading(doc, "Altman Z-Score (Bankruptcy Risk)", level=2)
-    z_score = _g(forensics, "altman_z_score", default=_g(fin, "altman_z_score", default="N/A"))
-    if z_score != "N/A":
+    z_score = _g(forensics, "altman_z_score", default=_g(fin, "altman_z_score", default="Not Given"))
+    if z_score not in ("N/A", "Not Given"):
         z_val = float(z_score)
         z_flag = "SAFE" if z_val > 2.99 else ("GREY ZONE" if z_val > 1.81 else "DISTRESS")
     else:
@@ -576,8 +581,8 @@ def generate_forensics_section(doc, data: dict):
 
     # Piotroski F-Score
     _add_styled_heading(doc, "Piotroski F-Score (Financial Strength)", level=2)
-    f_score = _g(forensics, "piotroski_f_score", default=_g(fin, "piotroski_f_score", default="N/A"))
-    if f_score != "N/A":
+    f_score = _g(forensics, "piotroski_f_score", default=_g(fin, "piotroski_f_score", default="Not Given"))
+    if f_score not in ("N/A", "Not Given"):
         f_val = int(float(f_score))
         f_flag = "STRONG" if f_val >= 7 else ("MODERATE" if f_val >= 4 else "WEAK")
     else:
@@ -604,9 +609,9 @@ def generate_forensics_section(doc, data: dict):
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 6 — PROMOTER NETWORK ANALYSIS                                    ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 6 €” PROMOTER NETWORK ANALYSIS                                    •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_network_section(doc, data: dict):
     """Promoter network description and contagion risk."""
@@ -619,19 +624,22 @@ def generate_network_section(doc, data: dict):
               "contagion risk from related entities.", size=10, italic=True)
 
     contagion = _g(network, "contagion_risk_score",
-                   default=_g(fin, "contagion_risk_score", default="N/A"))
-    if contagion != "N/A":
-        level = "HIGH" if float(contagion) > 0.5 else ("MEDIUM" if float(contagion) > 0.25 else "LOW")
+                   default=_g(fin, "contagion_risk_score"))
+    if not _not_given(contagion):
+        try:
+            level = "HIGH" if float(contagion) > 0.5 else ("MEDIUM" if float(contagion) > 0.25 else "LOW")
+        except (ValueError, TypeError):
+            level = "Not Given"
     else:
-        level = "N/A"
+        level = "Not Given"
     _add_risk_badge(doc, f"Contagion Risk Score: {_fmt(contagion)}", level)
 
     net_headers = ["Indicator", "Value"]
     net_rows = [
-        ["Promoter Total Companies", str(_g(fin, "promoter_total_companies", default="N/A"))],
-        ["Promoter NPA Companies", str(_g(fin, "promoter_npa_companies", default="N/A"))],
-        ["Promoter Struck-Off Companies", str(_g(fin, "promoter_struck_off_companies", default="N/A"))],
-        ["DIN Disqualified Directors", str(_g(fin, "din_disqualified_count", default="N/A"))],
+        ["Promoter Total Companies", str(_g(fin, "promoter_total_companies"))],
+        ["Promoter NPA Companies", str(_g(fin, "promoter_npa_companies"))],
+        ["Promoter Struck-Off Companies", str(_g(fin, "promoter_struck_off_companies"))],
+        ["DIN Disqualified Directors", str(_g(fin, "din_disqualified_count"))],
         ["Network NPA Ratio", _pct(_g(fin, "network_npa_ratio"))],
         ["Customer Concentration", _pct(_g(fin, "customer_concentration"))],
         ["Supplier Concentration", _pct(_g(fin, "supplier_concentration"))],
@@ -640,7 +648,7 @@ def generate_network_section(doc, data: dict):
 
     # Network insights if available
     insights = _g(network, "insights", default="")
-    if insights and insights != "N/A":
+    if insights and insights not in ("N/A", "Not Given"):
         doc.add_paragraph("")
         _add_para(doc, "Network Insights:", bold=True, size=10)
         _add_para(doc, str(insights), size=10)
@@ -648,9 +656,9 @@ def generate_network_section(doc, data: dict):
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 7 — SATELLITE & OPERATIONAL REALITY                              ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 7 €” SATELLITE & OPERATIONAL REALITY                              •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_satellite_section(doc, data: dict):
     """Satellite-based operational activity assessment."""
@@ -663,9 +671,9 @@ def generate_satellite_section(doc, data: dict):
               "imagery analysis of company premises.", size=10, italic=True)
 
     score = _g(satellite, "activity_score",
-               default=_g(fin, "satellite_activity_score", default="N/A"))
+               default=_g(fin, "satellite_activity_score", default="Not Given"))
     category = _g(satellite, "activity_category",
-                  default=_g(fin, "satellite_activity_category", default="N/A"))
+                  default=_g(fin, "satellite_activity_category", default="Not Given"))
     rev_flag = _g(satellite, "vs_revenue_flag",
                   default=_g(fin, "satellite_vs_revenue_flag", default=0))
 
@@ -686,7 +694,7 @@ def generate_satellite_section(doc, data: dict):
     gst_rows = [
         ["GST-Bank Divergence", _pct(_g(fin, "gst_vs_bank_divergence")),
          "RED" if _g(fin, "gst_divergence_flag", default=0) else "GREEN"],
-        ["GST Filing Delays", str(_g(fin, "gst_filing_delays_count", default="N/A")),
+        ["GST Filing Delays", str(_g(fin, "gst_filing_delays_count", default="Not Given")),
          "AMBER" if _g(fin, "gst_filing_delays_count", default=0) > 2 else "GREEN"],
         ["E-Way Bill Consistency", _pct(_g(fin, "ewaybill_volume_consistency")),
          "GREEN" if _g(fin, "ewaybill_volume_consistency", default=1) > 0.8 else "AMBER"],
@@ -698,12 +706,12 @@ def generate_satellite_section(doc, data: dict):
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 8 — STRESS TESTING                                               ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 8 €” STRESS TESTING                                               •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_stress_test_section(doc, data: dict):
-    """Monte Carlo stress test results — P10/P50/P90 and named scenarios."""
+    """Monte Carlo stress test results €” P10/P50/P90 and named scenarios."""
     _add_styled_heading(doc, "7. Stress Test Results", level=1)
 
     stress = _g(data, "stress_test", default={})
@@ -713,23 +721,23 @@ def generate_stress_test_section(doc, data: dict):
 
     # Percentile table
     _add_styled_heading(doc, "DSCR Distribution (Simulated)", level=2)
-    p10 = _g(stress, "dscr_p10", default="N/A")
-    p50 = _g(stress, "dscr_p50", default="N/A")
-    p90 = _g(stress, "dscr_p90", default="N/A")
-    breach_prob = _g(stress, "covenant_breach_probability", default="N/A")
+    p10 = _g(stress, "dscr_p10", default="Not Given")
+    p50 = _g(stress, "dscr_p50", default="Not Given")
+    p90 = _g(stress, "dscr_p90", default="Not Given")
+    breach_prob = _g(stress, "covenant_breach_probability", default="Not Given")
 
     pct_headers = ["Percentile", "Simulated DSCR", "Assessment"]
     pct_rows = [
         ["P10 (Severe Stress)", _fmt(p10),
-         "RED" if p10 != "N/A" and float(p10) < 1.0 else "AMBER"],
+         "RED" if p10 not in ("N/A", "Not Given") and float(p10) < 1.0 else "AMBER"],
         ["P50 (Base Case)", _fmt(p50),
-         "GREEN" if p50 != "N/A" and float(p50) > 1.2 else "AMBER"],
+         "GREEN" if p50 not in ("N/A", "Not Given") and float(p50) > 1.2 else "AMBER"],
         ["P90 (Optimistic)", _fmt(p90),
-         "GREEN" if p90 != "N/A" and float(p90) > 1.5 else "GREEN"],
+         "GREEN" if p90 not in ("N/A", "Not Given") and float(p90) > 1.5 else "GREEN"],
     ]
     _create_table(doc, pct_headers, pct_rows)
 
-    if breach_prob != "N/A":
+    if breach_prob not in ("N/A", "Not Given"):
         doc.add_paragraph("")
         _add_risk_badge(doc, "Probability of Covenant Breach (DSCR < 1.0)", _pct(breach_prob))
 
@@ -751,9 +759,9 @@ def generate_stress_test_section(doc, data: dict):
 
     # DNA matching
     dna = _g(data, "dna_match", default={})
-    closest = _g(dna, "closest_default_archetype", default="N/A")
-    similarity = _g(dna, "max_archetype_similarity", default="N/A")
-    if closest != "N/A":
+    closest = _g(dna, "closest_default_archetype", default="Not Given")
+    similarity = _g(dna, "max_archetype_similarity", default="Not Given")
+    if closest not in ("N/A", "Not Given"):
         doc.add_paragraph("")
         _add_styled_heading(doc, "Default DNA Matching", level=2)
         _add_key_value(doc, "Closest Default Archetype", str(closest))
@@ -762,9 +770,9 @@ def generate_stress_test_section(doc, data: dict):
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 9 — MANAGEMENT QUALITY (CEO INTERVIEW)                          ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 9 €” MANAGEMENT QUALITY (CEO INTERVIEW)                          •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_management_section(doc, data: dict):
     """CEO interview insights and management quality score.
@@ -787,13 +795,13 @@ def generate_management_section(doc, data: dict):
                   size=10, italic=True, color=GREY)
         doc.add_paragraph("")
 
-    _add_para(doc, "Assessment based on structured CEO/promoter interview analysis — scoring "
+    _add_para(doc, "Assessment based on structured CEO/promoter interview analysis €” scoring "
               "consistency between financial data and management narrative.",
               size=10, italic=True)
 
     # MQ score
-    mq = _g(ceo, "management_quality_score", default="N/A")
-    if mq != "N/A":
+    mq = _g(ceo, "management_quality_score", default="Not Given")
+    if mq not in ("N/A", "Not Given"):
         level = "GREEN" if float(mq) >= 65 else ("AMBER" if float(mq) >= 40 else "RED")
         _add_risk_badge(doc, f"Management Quality Score: {_fmt(mq, '.1f')}/100", level)
 
@@ -820,27 +828,27 @@ def generate_management_section(doc, data: dict):
         _add_para(doc, "Interview Red Flags:", bold=True, size=10, color=RED)
         for flag in flags:
             if isinstance(flag, dict):
-                _add_para(doc, f"  🚩 [{_g(flag, 'severity')}] {_g(flag, 'description')}",
+                _add_para(doc, f"  ðŸš© [{_g(flag, 'severity')}] {_g(flag, 'description')}",
                           size=9, color=RED)
 
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 10 — BULL VS BEAR (ADVERSARIAL DEBATE)                          ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 10 €” BULL VS BEAR (ADVERSARIAL DEBATE)                          •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_bull_bear_section(doc, data: dict):
     """Side-by-side adversarial bull and bear case arguments."""
     _add_styled_heading(doc, "9. Adversarial Credit Committee Debate", level=1)
 
-    _add_para(doc, "Two independent LLM agents debated this application — one building "
+    _add_para(doc, "Two independent LLM agents debated this application €” one building "
               "the strongest case for approval, the other seeking every reason to reject. "
               "This mirrors real credit committee dynamics with a devil's advocate.",
               size=10, italic=True)
 
     # Bull case
-    _add_styled_heading(doc, "🟢 Bull Case (Approval Agent)", level=2)
+    _add_styled_heading(doc, "ðŸŸ¢ Bull Case (Approval Agent)", level=2)
     bull = _g(data, "bull_case", default="Bull case not available.")
     for line in str(bull).split("\n"):
         line = line.strip()
@@ -848,7 +856,7 @@ def generate_bull_bear_section(doc, data: dict):
             continue
         if line.startswith("##"):
             _add_para(doc, line.replace("##", "").strip(), bold=True, size=11, color=GREEN)
-        elif line.startswith("-") or line.startswith("•") or line.startswith("   -"):
+        elif line.startswith("-") or line.startswith("€¢") or line.startswith("   -"):
             _add_para(doc, f"  {line}", size=9, space_after=2)
         else:
             _add_para(doc, line, size=10, space_after=3)
@@ -856,7 +864,7 @@ def generate_bull_bear_section(doc, data: dict):
     _add_page_break(doc)
 
     # Bear case
-    _add_styled_heading(doc, "🔴 Bear Case (Dissent Agent)", level=2)
+    _add_styled_heading(doc, "ðŸ”´ Bear Case (Dissent Agent)", level=2)
     bear = _g(data, "bear_case", default="Bear case not available.")
     for line in str(bear).split("\n"):
         line = line.strip()
@@ -864,7 +872,7 @@ def generate_bull_bear_section(doc, data: dict):
             continue
         if line.startswith("##"):
             _add_para(doc, line.replace("##", "").strip(), bold=True, size=11, color=RED)
-        elif line.startswith("-") or line.startswith("•") or line.startswith("   -"):
+        elif line.startswith("-") or line.startswith("€¢") or line.startswith("   -"):
             _add_para(doc, f"  {line}", size=9, space_after=2)
         else:
             _add_para(doc, line, size=10, space_after=3)
@@ -872,9 +880,9 @@ def generate_bull_bear_section(doc, data: dict):
     _add_page_break(doc)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  SECTION 11 — FINAL RECOMMENDATION                                        ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 11 €” FINAL RECOMMENDATION                                        •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_recommendation(doc, data: dict):
     """Final verdict with conditions and signatures."""
@@ -897,10 +905,10 @@ def generate_recommendation(doc, data: dict):
     # Bull & Bear summaries
     doc.add_paragraph("")
     _add_para(doc, "Arguments For (Bull Summary):", bold=True, size=10, color=GREEN)
-    _add_para(doc, str(_g(rec, "bull_summary", default="N/A")), size=10, space_after=6)
+    _add_para(doc, str(_g(rec, "bull_summary", default="Not Given")), size=10, space_after=6)
 
     _add_para(doc, "Arguments Against (Bear Summary):", bold=True, size=10, color=RED)
-    _add_para(doc, str(_g(rec, "bear_summary", default="N/A")), size=10, space_after=6)
+    _add_para(doc, str(_g(rec, "bear_summary", default="Not Given")), size=10, space_after=6)
 
     # Key conditions
     conditions = _g(rec, "key_conditions", default=[])
@@ -912,7 +920,7 @@ def generate_recommendation(doc, data: dict):
     # Final rationale
     doc.add_paragraph("")
     _add_para(doc, "Final Rationale:", bold=True, size=11)
-    _add_para(doc, str(_g(rec, "final_rationale", default="N/A")), size=10, italic=True)
+    _add_para(doc, str(_g(rec, "final_rationale", default="Not Given")), size=10, italic=True)
 
     # Signature block
     doc.add_paragraph("")
@@ -934,13 +942,13 @@ def generate_recommendation(doc, data: dict):
                 run.font.size = Pt(8)
 
     doc.add_paragraph("")
-    _add_para(doc, "— End of Credit Appraisal Memorandum —",
+    _add_para(doc, "€” End of Credit Appraisal Memorandum €”",
               size=10, italic=True, color=GREY, alignment=WD_ALIGN_PARAGRAPH.CENTER)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  PART C — DOCX ASSEMBLY                                                   ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  PART C €” DOCX ASSEMBLY                                                   •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def _setup_document() -> Any:
     """Create a new Document with professional styling and page setup."""
@@ -982,7 +990,7 @@ def _add_header_footer(doc, company_name: str):
         header = section.header
         header_para = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
         header_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        run = header_para.add_run(f"CONFIDENTIAL — {company_name} — Credit Appraisal Memo")
+        run = header_para.add_run(f"CONFIDENTIAL €” {company_name} €” Credit Appraisal Memo")
         run.font.size = Pt(7)
         run.font.color.rgb = GREY
         run.italic = True
@@ -991,7 +999,7 @@ def _add_header_footer(doc, company_name: str):
         footer = section.footer
         footer_para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
         footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = footer_para.add_run("Yakṣarāja | Vivriti Capital | Page ")
+        run = footer_para.add_run("Yaká¹£arÄja | Vivriti Capital | Page ")
         run.font.size = Pt(7)
         run.font.color.rgb = GREY
         # Page number field
@@ -1002,9 +1010,9 @@ def _add_header_footer(doc, company_name: str):
         footer_para._p.append(fld)
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  PART D — SAVE OUTPUT (DOCX + JSON)                                       ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  PART D €” SAVE OUTPUT (DOCX + JSON)                                       •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def _save_summary_json(data: dict, output_dir: str) -> str:
     """Save a summary scores JSON alongside the DOCX."""
@@ -1021,9 +1029,9 @@ def _save_summary_json(data: dict, output_dir: str) -> str:
         "company_name": str(company_name),
         "fiscal_year": _g(data, "fiscal_year"),
         "generated_at": datetime.now().isoformat(),
-        "lending_decision": _g(rec, "lending_decision", default="N/A"),
-        "recommended_limit_cr": _g(rec, "recommended_limit_cr", default="N/A"),
-        "recommended_rate_pct": _g(rec, "recommended_rate_pct", default="N/A"),
+        "lending_decision": _g(rec, "lending_decision", default="Not Given"),
+        "recommended_limit_cr": _g(rec, "recommended_limit_cr", default="Not Given"),
+        "recommended_rate_pct": _g(rec, "recommended_rate_pct", default="Not Given"),
         "ensemble_pd": _g(ml, "ensemble_pd", default=_g(fin, "ensemble_pd")),
         "dscr": _g(fin, "dscr"),
         "interest_coverage": _g(fin, "interest_coverage"),
@@ -1047,9 +1055,9 @@ def _save_summary_json(data: dict, output_dir: str) -> str:
     return json_path
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  MAIN ENTRY POINT                                                         ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  MAIN ENTRY POINT                                                         •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_cam(
     all_data: dict,
@@ -1088,7 +1096,7 @@ def generate_cam(
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
-    # ── Build the DOCX ───────────────────────────────────────────────────
+    # ”€”€ Build the DOCX ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
     doc = _setup_document()
 
     # Convert financial_data from pd.Series to dict if needed
@@ -1096,7 +1104,7 @@ def generate_cam(
     if hasattr(fin_data, "to_dict"):
         all_data["financial_data"] = fin_data.to_dict()
 
-    # ── Run consistency validation (Rules 4, 5, 6, 7) ────────────────────
+    # ”€”€ Run consistency validation (Rules 4, 5, 6, 7) ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
     logger.info("Running CAM consistency validation...")
     validation_issues = validate_cam_consistency(all_data)
     if validation_issues:
@@ -1138,19 +1146,19 @@ def generate_cam(
     # Add headers/footers
     _add_header_footer(doc, str(company_name))
 
-    # ── Save DOCX ────────────────────────────────────────────────────────
+    # ”€”€ Save DOCX ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
     docx_filename = f"CAM_{safe_name}_{date_str}.docx"
     docx_path = os.path.join(output_dir, docx_filename)
 
     try:
         doc.save(docx_path)
         docx_path = os.path.abspath(docx_path)
-        logger.info(f"✅ CAM saved: {docx_path}")
+        logger.info(f"œ… CAM saved: {docx_path}")
     except Exception as e:
         logger.error(f"Failed to save DOCX: {e}")
         return ""
 
-    # ── Save summary JSON ────────────────────────────────────────────────
+    # ”€”€ Save summary JSON ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
     json_path = _save_summary_json(all_data, output_dir)
 
     logger.info(f"{'='*60}")
@@ -1162,13 +1170,13 @@ def generate_cam(
     return docx_path
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  CLI — STANDALONE TEST                                                    ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  CLI €” STANDALONE TEST                                                    •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("CAM GENERATOR — Standalone Test (Demo Data)")
+    print("CAM GENERATOR €” Standalone Test (Demo Data)")
     print("=" * 60)
 
     demo_data = {
@@ -1184,15 +1192,15 @@ if __name__ == "__main__":
             "cfo": 95.0, "cfi": -55.0, "cff": -30.0, "capex": 55.0, "free_cash_flow": 42.0,
             "dscr": 1.85, "interest_coverage": 2.4, "debt_to_equity": 1.6,
             "current_ratio": 1.25, "roe": 0.14, "roa": 0.06,
-            "promoter_holding_pct": 0.62, "promoter_pledge_pct": 0.08,
-            "institutional_holding_pct": 0.18,
+            "promoter_holding_pct": None, "promoter_pledge_pct": None,
+            "institutional_holding_pct": None,
             "beneish_m_score": -2.45, "altman_z_score": 2.3, "piotroski_f_score": 6,
             "auditor_distress_score": 1, "going_concern_flag": 0,
             "qualified_opinion_flag": 0, "auditor_resigned_flag": 0,
             "related_party_tx_to_rev": 0.05,
-            "promoter_total_companies": 4, "promoter_npa_companies": 0,
-            "promoter_struck_off_companies": 0, "din_disqualified_count": 0,
-            "network_npa_ratio": 0.0, "contagion_risk_score": 0.15,
+            "promoter_total_companies": None, "promoter_npa_companies": None,
+            "promoter_struck_off_companies": None, "din_disqualified_count": None,
+            "network_npa_ratio": None, "contagion_risk_score": None,
             "customer_concentration": 0.35, "supplier_concentration": 0.42,
             "satellite_activity_score": 82.5, "satellite_activity_category": "ACTIVE",
             "satellite_vs_revenue_flag": 0,
@@ -1261,7 +1269,7 @@ if __name__ == "__main__":
             "recommended_limit_cr": 187.0,
             "recommended_rate_pct": 10.0,
             "key_conditions": [
-                "DSCR floor covenant at 1.20x — quarterly monitoring",
+                "DSCR floor covenant at 1.20x €” quarterly monitoring",
                 "Promoter personal guarantee covering 50% of exposure",
                 "Quarterly GST cross-verification with bank statements",
                 "Annual credit review with fresh financials",
@@ -1278,7 +1286,9 @@ if __name__ == "__main__":
 
     path = generate_cam(demo_data, output_dir="data/processed/")
     if path:
-        print(f"\n✅ Demo CAM generated: {path}")
+        print(f"\nœ… Demo CAM generated: {path}")
     else:
-        print("\n❌ CAM generation failed")
+        print("\nŒ CAM generation failed")
     print("=" * 60)
+
+

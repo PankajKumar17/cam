@@ -212,6 +212,8 @@ def _normalize_features(features: Dict[str, float]) -> Dict[str, float]:
 
     normalised = {}
     for feat, val in features.items():
+        if val is None:
+            continue
         lo, hi = RANGES.get(feat, (0.0, 1.0))
         if hi - lo < 1e-9:
             normalised[feat] = 0.5
