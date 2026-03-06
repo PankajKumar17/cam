@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response as RawResponse
 import json as _json
@@ -44,13 +45,14 @@ logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
 app = FastAPI(title="Yakṣarāja API", version="1.0.0", default_response_class=UTF8JSONResponse)
 
 _allowed_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
-_frontend_url = os.getenv("FRONTEND_URL", "").strip()
+_frontend_url = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
 if _frontend_url:
     _allowed_origins.append(_frontend_url)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -454,6 +456,11 @@ def _adapt_pipeline_results(results: dict) -> dict:
         "network": network_adapted,
         "stress_test": stress_adapted,
         "satellite": results.get("satellite", {}),
+        "gst": results.get("gst", {}),
+        "mca_legal": results.get("mca_legal", {}),
+        "bank_analysis": results.get("bank_analysis", {}),
+        "pdf_analysis": results.get("pdf_analysis"),
+        "qualitative_notes": company_data.get("qualitative_notes"),
         "dna_match": dna_adapted,
         "research": results.get("research", {}),
         "ceo_interview": ceo_raw,
@@ -489,8 +496,10 @@ async def analyse(
     file: UploadFile = File(...),
     ceo_audio: Optional[UploadFile] = File(None),
     ceo_transcript: Optional[str] = Form(None),
+    pdf_files: Optional[List[UploadFile]] = File(None),
+    qualitative_notes: Optional[str] = Form(None),
 ):
-    """Upload financials (and optionally CEO interview audio/transcript) then run the pipeline."""
+    """Upload financials (and optionally CEO interview audio/transcript + PDF documents) then run the pipeline."""
     allowed_ext = {".xlsx", ".xls", ".csv"}
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in allowed_ext:
@@ -502,10 +511,17 @@ async def analyse(
         if audio_ext not in allowed_audio_ext:
             raise HTTPException(400, f"Unsupported audio type: {audio_ext}. Use mp3/wav/mp4")
 
+    if pdf_files:
+        for pf in pdf_files:
+            if pf and pf.filename:
+                if not pf.filename.lower().endswith(".pdf"):
+                    raise HTTPException(400, f"PDF upload '{pf.filename}' is not a .pdf file")
+
     # Save uploads to temp dir
     tmp_dir = tempfile.mkdtemp()
     tmp_path = os.path.join(tmp_dir, file.filename)
     ceo_audio_path = None
+    saved_pdf_paths: List[str] = []
     try:
         with open(tmp_path, "wb") as f:
             content = await file.read()
@@ -523,6 +539,18 @@ async def analyse(
                 f.write(audio_content)
             ceo_audio_path = ceo_tmp_path
 
+        # Save PDF documents if provided
+        if pdf_files:
+            for pf in pdf_files:
+                if pf and pf.filename:
+                    pdf_tmp_path = os.path.join(tmp_dir, pf.filename)
+                    pdf_content = await pf.read()
+                    if len(pdf_content) > 100 * 1024 * 1024:  # 100MB per PDF
+                        raise HTTPException(413, f"PDF '{pf.filename}' too large (max 100MB)")
+                    with open(pdf_tmp_path, "wb") as f:
+                        f.write(pdf_content)
+                    saved_pdf_paths.append(pdf_tmp_path)
+
         # Parse the uploaded financials
         company_data = parse_screener_excel(tmp_path, company_name=company_name)
 
@@ -533,6 +561,8 @@ async def analyse(
             output_dir=os.path.join(PROJECT_ROOT, "data", "processed"),
             ceo_audio_path=ceo_audio_path,
             ceo_transcript=ceo_transcript or None,
+            pdf_paths=saved_pdf_paths or None,
+            qualitative_notes=qualitative_notes or None,
         )
 
         # Adapt to dashboard format
