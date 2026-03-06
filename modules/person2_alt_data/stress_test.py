@@ -423,8 +423,8 @@ NAMED_SCENARIO_DEFINITIONS: List[Dict[str, Any]] = [
         },
     },
     {
-        "name": "Cotton Price +30%",
-        "description": "Raw material (cotton) price surge of 30%; textile sector stress",
+        "name": "Commodity Price +30%",
+        "description": "Raw material / input commodity price surge of 30%; sector-specific stress",
         "shocks": {
             "repo_rate_shock": 0.0,
             "inflation_shock": 0.0,
@@ -482,6 +482,31 @@ def get_named_scenarios(
     if company_financials is None:
         company_financials = DEFAULT_FINANCIALS.copy()
 
+    # ── Sector-aware commodity scenario name ─────────────────────────────
+    _SECTOR_COMMODITY = {
+        "textile": "Cotton",
+        "steel": "Iron Ore / Coking Coal",
+        "energy": "Steel / Components",
+        "wind": "Steel / Components",
+        "renewable": "Steel / Components",
+        "power": "Coal",
+        "auto": "Steel / Aluminium",
+        "cement": "Coal / Limestone",
+        "pharma": "API / Chemicals",
+        "chemical": "Crude / Feedstock",
+        "oil": "Crude Oil",
+        "fmcg": "Palm Oil / Packaging",
+        "real estate": "Cement / Steel",
+        "construction": "Cement / Steel",
+        "it": "Hardware / Licences",
+        "technology": "Hardware / Licences",
+    }
+    sector_raw = (company_financials.get("sector") or "").lower()
+    commodity_label = next(
+        (label for keyword, label in _SECTOR_COMMODITY.items() if keyword in sector_raw),
+        "Commodity",
+    )
+
     logger.info("Running 4 named stress scenarios")
 
     # ── Determine P10 levels for "Combined Adverse" ──────────────────────
@@ -512,6 +537,10 @@ def get_named_scenarios(
     for defn in NAMED_SCENARIO_DEFINITIONS:
         name = defn["name"]
         desc = defn["description"]
+        # Rename generic "Commodity" scenario to sector-specific label
+        if name == "Commodity Price +30%":
+            name = f"{commodity_label} Price +30%"
+            desc = f"{commodity_label} input cost surge of 30%; sector-specific stress"
 
         # Resolve "P10" sentinel for Combined Adverse
         if defn["shocks"] == "P10":

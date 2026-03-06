@@ -7,9 +7,9 @@ import {
 import { useAnalysis } from '../App'
 import { Card, SectionHeader, DataTable, EmptyState, Badge } from '../components/ui'
 import { g, fmt, pct, RISK_COLORS } from '../lib/utils'
-import { BarChart2, TrendingUp, Zap, MessageSquare } from 'lucide-react'
+import { BarChart2, TrendingUp, Zap, MessageSquare, Satellite } from 'lucide-react'
 
-const TABS = ['Financial', 'Forensics', 'Stress Test', 'Bull vs Bear']
+const TABS = ['Financial', 'Forensics', 'Stress Test', 'Bull vs Bear', 'Satellite']
 
 const tooltipStyle = {
   background: '#1A1A1A', border: 'none', borderRadius: 8,
@@ -24,6 +24,7 @@ export default function DeepDive() {
   const fin = g(d, 'financial_data') || {}
   const traj = g(d, 'trajectory') || {}
   const stress = g(d, 'stress_test') || {}
+  const sat = g(d, 'satellite') || {}
   const company = d.company_name || 'Company'
 
   return (
@@ -50,6 +51,7 @@ export default function DeepDive() {
       {activeTab === 1 && <ForensicsTab fin={fin} d={d} />}
       {activeTab === 2 && <StressTab stress={stress} />}
       {activeTab === 3 && <DebateTab d={d} />}
+      {activeTab === 4 && <SatelliteTab sat={sat} />}
     </motion.div>
   )
 }
@@ -295,6 +297,124 @@ function DebateTab({ d }) {
           <p className="text-base leading-relaxed">{verdict}</p>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ── Satellite Tab ──────────────────────────── */
+function SatelliteTab({ sat }) {
+  const score = sat.activity_score ?? 0
+  const classification = sat.activity_category ?? sat.classification ?? 'N/A'
+  const ndviScore = sat.ndvi_score ?? 0
+  const brightnessScore = sat.brightness_score ?? 0
+  const deltaScore = sat.delta_score ?? 50
+  const flag = sat.satellite_vs_revenue_flag ?? sat.vs_revenue_flag ?? 0
+  const source = sat.data_source ?? 'synthetic_fallback'
+  const imageCurrent = sat.image_b64
+  const imageBaseline = sat.baseline_image_b64
+
+  const scoreColor = score >= 70 ? '#10B981' : score >= 50 ? '#F59E0B' : score >= 30 ? '#F97316' : '#EF4444'
+
+  const subScores = [
+    { label: 'NDVI Score', value: ndviScore, weight: '35%', color: '#1565C0', desc: 'Low NDVI = industrial activity (good for factory)' },
+    { label: 'Brightness Score', value: brightnessScore, weight: '40%', color: '#E8470A', desc: 'Higher pixel brightness = more surface activity' },
+    { label: 'Temporal Delta', value: deltaScore, weight: '25%', color: '#10B981', desc: 'Change in brightness vs 6-month baseline' },
+  ]
+
+  return (
+    <div className="space-y-4">
+      {/* Source badge */}
+      <div className="flex items-center gap-2">
+        <Satellite size={15} className="text-text-muted" />
+        <span className="text-xs text-text-muted">Data source:</span>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${source === 'sentinel_api' ? 'bg-success-bg text-success' : 'bg-surface-row text-text-secondary'}`}>
+          {source === 'sentinel_api' ? 'Sentinel-2 Live Imagery (ESA Copernicus)' : 'Synthetic Model (Sentinel Hub credentials not active)'}
+        </span>
+      </div>
+
+      {/* Images */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <h3 className="text-sm font-semibold text-dark mb-3">Current Imagery</h3>
+          {imageCurrent ? (
+            <img
+              src={`data:image/png;base64,${imageCurrent}`}
+              alt="Current satellite view"
+              className="w-full rounded-xl border border-border"
+              style={{ imageRendering: 'pixelated' }}
+            />
+          ) : (
+            <EmptyState icon={Satellite} title="Image unavailable" subtitle="No image data returned" />
+          )}
+          <p className="text-xs text-text-muted mt-2">{sat.current_date || 'Latest available'} · RGB composite (B04/B03/B02)</p>
+        </Card>
+
+        <Card>
+          <h3 className="text-sm font-semibold text-dark mb-3">6-Month Baseline</h3>
+          {imageBaseline ? (
+            <img
+              src={`data:image/png;base64,${imageBaseline}`}
+              alt="Baseline satellite view"
+              className="w-full rounded-xl border border-border"
+              style={{ imageRendering: 'pixelated' }}
+            />
+          ) : (
+            <EmptyState icon={Satellite} title="Baseline unavailable" subtitle="No historical image found" />
+          )}
+          <p className="text-xs text-text-muted mt-2">{sat.baseline_date || '~6 months ago'} · RGB composite (B04/B03/B02)</p>
+        </Card>
+      </div>
+
+      {/* Score + breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4">
+        <Card className="flex flex-col items-center justify-center p-8 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">Activity Score</p>
+          <p className="text-5xl font-bold" style={{ color: scoreColor }}>{fmt(score, 1)}</p>
+          <p className="text-xs text-text-muted mt-1">/ 100</p>
+          <span className="mt-3 px-3 py-1 rounded-full text-xs font-bold border" style={{ borderColor: scoreColor, color: scoreColor }}>
+            {classification}
+          </span>
+          {flag ? (
+            <div className="mt-3 bg-danger-bg text-danger text-xs px-3 py-1.5 rounded-lg font-semibold">⚠ Revenue Mismatch</div>
+          ) : (
+            <div className="mt-3 bg-success-bg text-success text-xs px-3 py-1.5 rounded-lg font-semibold">✓ Revenue Consistent</div>
+          )}
+        </Card>
+
+        <Card>
+          <h3 className="text-sm font-semibold text-dark mb-4">Score Breakdown</h3>
+          <div className="space-y-4">
+            {subScores.map(s => (
+              <div key={s.label}>
+                <div className="flex justify-between items-baseline mb-1">
+                  <span className="text-xs font-medium text-text-secondary">{s.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-text-muted">weight {s.weight}</span>
+                    <span className="text-sm font-bold text-dark">{fmt(s.value, 1)}</span>
+                  </div>
+                </div>
+                <div className="h-2.5 bg-border rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(s.value, 100)}%`, background: s.color }} />
+                </div>
+                <p className="text-[10px] text-text-muted mt-0.5">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-border grid grid-cols-3 gap-2">
+            {[
+              { label: 'NDVI (mean)', value: (sat.mean_ndvi ?? 0).toFixed(4) },
+              { label: 'Brightness', value: (sat.mean_brightness ?? 0).toFixed(4) },
+              { label: 'Δ Brightness', value: sat.brightness_delta != null ? `${sat.brightness_delta >= 0 ? '+' : ''}${sat.brightness_delta.toFixed(4)}` : 'N/A' },
+            ].map(m => (
+              <div key={m.label} className="bg-surface-row rounded-lg p-2 text-center">
+                <p className="text-[10px] text-text-muted">{m.label}</p>
+                <p className="text-xs font-mono font-semibold text-dark mt-0.5">{m.value}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   )
 }

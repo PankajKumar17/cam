@@ -695,6 +695,42 @@ def _check_revenue_consistency(
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  IMAGE → BASE64 HELPER                                                    ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+def _image_to_b64(image: Optional[np.ndarray]) -> Optional[str]:
+    """
+    Convert a (H, W, 4) float32 satellite image to a base64-encoded PNG.
+    Only RGB bands (first 3) are used; values are contrast-stretched to 0-255.
+    Returns None if matplotlib is unavailable or conversion fails.
+    """
+    if image is None or not MATPLOTLIB_AVAILABLE:
+        return None
+    try:
+        from io import BytesIO
+        import base64 as _b64
+        from matplotlib.figure import Figure
+
+        rgb = image[:, :, :3]   # Red, Green, Blue
+        lo, hi = float(rgb.min()), float(rgb.max())
+        if hi > lo:
+            rgb_norm = ((rgb - lo) / (hi - lo) * 255).astype(np.uint8)
+        else:
+            rgb_norm = np.zeros_like(rgb, dtype=np.uint8)
+
+        fig = Figure(figsize=(2.56, 2.56), dpi=100, frameon=False)
+        ax = fig.add_axes([0, 0, 1, 1])
+        ax.imshow(rgb_norm, aspect="auto")
+        ax.axis("off")
+        buf = BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0)
+        return _b64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception as e:
+        logger.warning(f"_image_to_b64 failed: {e}")
+        return None
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  HIGH-LEVEL ENTRY POINT                                                   ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
@@ -765,11 +801,21 @@ def get_factory_activity(
         image_baseline = fetch_satellite_image(lat, lon, baseline_date)
         activity_data = compute_activity_score(image_current, image_baseline)
         activity_data["data_source"] = "sentinel_api"
+        activity_data["image_b64"] = _image_to_b64(image_current)
+        activity_data["baseline_image_b64"] = _image_to_b64(image_baseline)
         logger.info("Using real Sentinel-2 imagery")
     else:
         # ── Fallback: synthetic proxy ────────────────────────────────────
         activity_data = _compute_fallback_activity(company_name, lat, lon)
         logger.info(f"Using synthetic fallback (score={activity_data['activity_score']:.2f})")
+        # Generate synthetic images so the dashboard can still display something
+        coord_hash = hashlib.md5(f"{lat:.4f},{lon:.4f}".encode()).hexdigest()
+        _seed = int(coord_hash[:8], 16) % (2 ** 31)
+        _level = activity_data["activity_score"] / 100.0
+        syn_cur = _generate_synthetic_image(lat, lon, activity_level=_level, seed=_seed)
+        syn_base = _generate_synthetic_image(lat, lon, activity_level=max(0.1, _level * 0.92), seed=_seed + 1)
+        activity_data["image_b64"] = _image_to_b64(syn_cur)
+        activity_data["baseline_image_b64"] = _image_to_b64(syn_base)
 
     # ── Revenue consistency check ────────────────────────────────────────
     revenue_check = _check_revenue_consistency(
