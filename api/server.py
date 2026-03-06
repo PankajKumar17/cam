@@ -312,7 +312,14 @@ def _adapt_pipeline_results(results: dict) -> dict:
         "model_disagreement_flag": ml_scores.get("model_disagreement_flag", False),
     }
 
-    dscr_simulated = stress_raw.get("dscr_simulated", stress_raw.get("all_dscr", []))
+    # stress_test returns "simulated_dscrs" (numpy ndarray) — convert to plain list
+    _sim = stress_raw.get("simulated_dscrs",
+           stress_raw.get("dscr_simulated",
+           stress_raw.get("all_dscr", [])))
+    try:
+        dscr_simulated = [round(float(v), 4) for v in _sim]
+    except (TypeError, ValueError):
+        dscr_simulated = []
     named_scenarios_raw = stress_raw.get("named_scenarios", {})
     if isinstance(named_scenarios_raw, dict):
         scenarios = named_scenarios_raw.get("scenarios", [])

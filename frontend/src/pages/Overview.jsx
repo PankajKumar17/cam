@@ -81,7 +81,7 @@ export default function Overview() {
 
       {/* Row 1 — 4 Metric Cards */}
       <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-        <MetricCard label="Lending Decision" value={decision.replace('_', ' ')} subtitle={rec.final_rationale ? rec.final_rationale.slice(0, 60) + '...' : ''} variant="dark" icon={Shield} />
+        <MetricCard label="Lending Decision" value={decision.replace(/_/g, ' ')} subtitle={rec.final_rationale ? rec.final_rationale.slice(0, 60) + '...' : ''} variant={decision.includes('APPROVE') && !decision.includes('REJECT') ? 'green' : decision.includes('REJECT') ? 'red' : decision.includes('CONDITIONAL') ? 'amber' : 'dark'} icon={Shield} />
         <MetricCard label="PD Score" value={pct(ensemblePd)} subtitle={`Ensemble of 3 models`} variant="orange" icon={Target} />
         <MetricCard label="Credit Limit" value={limit != null ? `₹${fmt(limit)} Cr` : '—'} subtitle="Recommended exposure" icon={DollarSign} />
         <MetricCard label="Interest Rate" value={rate != null ? `${fmt(rate)}%` : '—'} subtitle={premium != null ? `Risk premium: ${fmt(premium)}%` : ''} icon={Percent} />

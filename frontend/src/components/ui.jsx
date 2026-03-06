@@ -25,6 +25,18 @@ export function MetricCard({ label, value, subtitle, icon: Icon, variant = 'whit
       bg: 'bg-dark shadow-[0_4px_16px_rgba(0,0,0,0.25)]',
       label: 'text-white/50', value: 'text-white', sub: 'text-white/40', icon: 'text-white/30',
     },
+    green: {
+      bg: 'bg-gradient-to-br from-[#059669] to-[#10B981] shadow-[0_8px_32px_rgba(16,185,129,0.40)]',
+      label: 'text-white/70', value: 'text-white', sub: 'text-white/60', icon: 'text-white/50',
+    },
+    amber: {
+      bg: 'bg-gradient-to-br from-[#D97706] to-[#F59E0B] shadow-[0_8px_32px_rgba(245,158,11,0.40)]',
+      label: 'text-white/70', value: 'text-white', sub: 'text-white/60', icon: 'text-white/50',
+    },
+    red: {
+      bg: 'bg-gradient-to-br from-[#DC2626] to-[#EF4444] shadow-[0_8px_32px_rgba(239,68,68,0.40)]',
+      label: 'text-white/70', value: 'text-white', sub: 'text-white/60', icon: 'text-white/50',
+    },
   }
   const s = styles[variant] || styles.white
 

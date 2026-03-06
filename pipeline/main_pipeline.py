@@ -266,10 +266,17 @@ def run_layer3_trajectory(company_name: str, company_data: dict = None) -> dict:
             if "error" not in result:
                 logger.info(f"Trajectory: {result['warning_level']} "
                             f"(risk={result['trajectory_risk_score']:.4f})")
-                # Inject multi-year history from parser if LSTM didn't provide it
-                if not result.get("fiscal_years") and company_data:
-                    result["fiscal_years"]  = company_data.get("fiscal_years", [])
-                    result["dscr_history"]  = company_data.get("dscr_history", [])
+                # Always prefer the full multi-year history from the Excel parser
+                # over the LSTM's 5-year training window
+                if company_data:
+                    full_fy   = company_data.get("fiscal_years", [])
+                    full_dscr = company_data.get("dscr_history", [])
+                    if full_fy and len(full_fy) > len(result.get("dscr_trend", [])):
+                        result["fiscal_years"] = full_fy
+                        result["dscr_history"]  = full_dscr
+                    elif not result.get("fiscal_years"):
+                        result["fiscal_years"] = full_fy
+                        result["dscr_history"]  = full_dscr
                 return result
     except Exception as e:
         logger.warning(f"Trajectory model unavailable: {e}")

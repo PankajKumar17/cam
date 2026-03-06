@@ -358,76 +358,176 @@ def _add_page_break(doc):
 # •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_cover_page(doc, data: dict):
-    """Generate the CAM cover page with title, company, date, confidentiality."""
-    # Spacing before title
-    for _ in range(4):
-        doc.add_paragraph("")
+    """Generate a polished CAM cover page with header banner, key metrics table."""
+    company_name = str(_g(data, "company_name", default="[Company Name]"))
+    fiscal_year  = _g(data, "fiscal_year", default="2025")
+    sector       = _g(data, "sector", default="Industrial")
+    decision     = _g(data, "recommendation", "lending_decision", default="REVIEW")
+    fin          = _g(data, "financial_data", default={})
+    ml           = _g(data, "ml_scores", default={})
+    rec          = _g(data, "recommendation", default={})
 
-    # Logo placeholder
-    _add_para(doc, "[VIVRITI CAPITAL LOGO]", bold=True, size=12,
-              color=GREY, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-
-    doc.add_paragraph("")
-
-    # Title
-    title = doc.add_paragraph()
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title.add_run("CREDIT APPRAISAL MEMORANDUM")
-    run.bold = True
-    run.font.size = Pt(26)
-    run.font.color.rgb = NAVY
-
-    doc.add_paragraph("")
-
-    # Company name
-    company = doc.add_paragraph()
-    company.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = company.add_run(str(_g(data, "company_name", default="[Company Name]")))
-    run.bold = True
-    run.font.size = Pt(20)
-    run.font.color.rgb = DARK_BLUE
-
-    # Fiscal year
-    fy = doc.add_paragraph()
-    fy.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = fy.add_run(f"Fiscal Year: {_g(data, 'fiscal_year', default='FY2024')}")
-    run.font.size = Pt(14)
-    run.font.color.rgb = GREY
-
-    # Date
-    date_para = doc.add_paragraph()
-    date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = date_para.add_run(f"Date: {datetime.now().strftime('%d %B %Y')}")
-    run.font.size = Pt(12)
-    run.font.color.rgb = GREY
-
-    # Decision badge
-    decision = _g(data, "recommendation", "lending_decision", default="REVIEW")
-    doc.add_paragraph("")
-    dec_para = doc.add_paragraph()
-    dec_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = dec_para.add_run(f"RECOMMENDATION: {decision}")
-    run.bold = True
-    run.font.size = Pt(16)
-    run.font.color.rgb = _risk_color(decision)
-
-    # Confidentiality
-    for _ in range(4):
-        doc.add_paragraph("")
-    conf = doc.add_paragraph()
-    conf.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = conf.add_run("STRICTLY CONFIDENTIAL")
-    run.bold = True
-    run.font.size = Pt(10)
-    run.font.color.rgb = RED
-    sub = doc.add_paragraph()
-    sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = sub.add_run(
-        "This document is prepared for internal use of Vivriti Capital's Credit Committee. "
-        "Distribution outside the committee requires prior authorization."
+    dec_color_hex = (
+        "1B7A2B" if "APPROVE" in str(decision).upper() and "REJECT" not in str(decision).upper()
+        else "C62828" if "REJECT" in str(decision).upper()
+        else "E68A00"
     )
-    run.font.size = Pt(8)
-    run.font.color.rgb = GREY
+    dec_rgb = _risk_color(decision)
+
+    # ── TOP HEADER BANNER (full-width navy table) ────────────────────────
+    header_tbl = doc.add_table(rows=1, cols=2)
+    header_tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
+    # Left cell — firm name
+    lc = header_tbl.rows[0].cells[0]
+    _set_cell_shading(lc, "0A1F3C")
+    lc.width = Cm(13)
+    lp = lc.paragraphs[0]
+    lp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    lr = lp.add_run("YAKṢARĀJA")
+    lr.bold = True
+    lr.font.size = Pt(18)
+    lr.font.color.rgb = WHITE
+    lp2 = lc.add_paragraph()
+    lr2 = lp2.add_run("AI Credit Decisioning Engine")
+    lr2.font.size = Pt(9)
+    lr2.font.color.rgb = RGBColor(0xB0, 0xC4, 0xDE)
+    lp2.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    # Right cell — date + confidential
+    rc = header_tbl.rows[0].cells[1]
+    _set_cell_shading(rc, "0A1F3C")
+    rc.width = Cm(7)
+    rp = rc.paragraphs[0]
+    rp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    rr = rp.add_run(datetime.now().strftime("%d %B %Y"))
+    rr.font.size = Pt(10)
+    rr.font.color.rgb = RGBColor(0xB0, 0xC4, 0xDE)
+    rp2 = rc.add_paragraph()
+    rr2 = rp2.add_run("STRICTLY CONFIDENTIAL")
+    rr2.font.size = Pt(8)
+    rr2.bold = True
+    rr2.font.color.rgb = RGBColor(0xFF, 0xA0, 0x70)
+    rp2.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    doc.add_paragraph("")
+
+    # ── ORANGE ACCENT LINE ───────────────────────────────────────────────
+    accent_tbl = doc.add_table(rows=1, cols=1)
+    acc_cell = accent_tbl.rows[0].cells[0]
+    _set_cell_shading(acc_cell, "E86C00")
+    acc_cell.paragraphs[0].add_run(" ")
+    for row in accent_tbl.rows:
+        row.height = Cm(0.15)
+
+    # ── MAIN TITLE ───────────────────────────────────────────────────────
+    for _ in range(2):
+        doc.add_paragraph("")
+    title_p = doc.add_paragraph()
+    title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    tr = title_p.add_run("CREDIT APPRAISAL MEMORANDUM")
+    tr.bold = True
+    tr.font.size = Pt(28)
+    tr.font.color.rgb = NAVY
+
+    doc.add_paragraph("")
+
+    # ── COMPANY NAME ─────────────────────────────────────────────────────
+    comp_p = doc.add_paragraph()
+    comp_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    cr = comp_p.add_run(company_name)
+    cr.bold = True
+    cr.font.size = Pt(22)
+    cr.font.color.rgb = DARK_BLUE
+
+    # ── SECTOR | FY ──────────────────────────────────────────────────────
+    meta_p = doc.add_paragraph()
+    meta_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    mr = meta_p.add_run(f"{sector}  ·  Fiscal Year {fiscal_year}")
+    mr.font.size = Pt(12)
+    mr.font.color.rgb = GREY
+
+    for _ in range(2):
+        doc.add_paragraph("")
+
+    # ── RECOMMENDATION BADGE TABLE ───────────────────────────────────────
+    badge_tbl = doc.add_table(rows=1, cols=1)
+    badge_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    bc = badge_tbl.rows[0].cells[0]
+    _set_cell_shading(bc, dec_color_hex)
+    bc.width = Cm(10)
+    bp = bc.paragraphs[0]
+    bp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    br = bp.add_run(f"RECOMMENDATION:  {str(decision).replace('_', ' ')}")
+    br.bold = True
+    br.font.size = Pt(16)
+    br.font.color.rgb = WHITE
+
+    for _ in range(2):
+        doc.add_paragraph("")
+
+    # ── KEY METRICS SUMMARY TABLE ─────────────────────────────────────────
+    _add_para(doc, "KEY METRICS AT A GLANCE", bold=True, size=10,
+              color=NAVY, alignment=WD_ALIGN_PARAGRAPH.CENTER, space_after=4)
+
+    dscr_val    = _g(fin, "dscr", default=None)
+    pd_val      = _g(ml,  "ensemble_pd", default=_g(fin, "ensemble_pd", default=None))
+    icr_val     = _g(fin, "interest_coverage", default=None)
+    de_val      = _g(fin, "debt_to_equity", default=None)
+    rev_val     = _g(fin, "revenue", default=None)
+    limit_val   = _g(rec, "recommended_limit_cr", default=None)
+    rate_val    = _g(rec, "recommended_rate_pct", default=None)
+
+    def _mv(v, fmt_str=".2f", prefix="", suffix=""):
+        if v is None or v == "Not Given": return "N/A"
+        try: return f"{prefix}{float(v):{fmt_str}}{suffix}"
+        except: return str(v)
+
+    metrics_rows = [
+        ["Revenue (FY{})" .format(fiscal_year), _mv(rev_val, ",.0f", "₹", " Cr"),
+         "Interest Coverage",                   _mv(icr_val, ".2f", "", "x")],
+        ["DSCR",                                _mv(dscr_val, ".2f", "", "x"),
+         "Debt / Equity",                       _mv(de_val, ".2f", "", "x")],
+        ["Ensemble PD",                         _mv(pd_val, ".2%") if pd_val not in (None, "Not Given") else "N/A",
+         "Recommended Rate",                    _mv(rate_val, ".2f", "", "%")],
+        ["Credit Limit",                        _mv(limit_val, ",.1f", "₹", " Cr"),
+         "Analysis Date",                       datetime.now().strftime("%d %b %Y")],
+    ]
+
+    metrics_tbl = doc.add_table(rows=len(metrics_rows), cols=4)
+    metrics_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for r_idx, row_data in enumerate(metrics_rows):
+        for c_idx, val in enumerate(row_data):
+            cell = metrics_tbl.rows[r_idx].cells[c_idx]
+            cell.text = ""
+            para = cell.paragraphs[0]
+            is_label = (c_idx % 2 == 0)
+            run = para.add_run(str(val))
+            run.font.size = Pt(9)
+            run.bold = is_label
+            if is_label:
+                run.font.color.rgb = NAVY
+                para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                _set_cell_shading(cell, "EEF2F8")
+            else:
+                run.font.color.rgb = BLACK
+                para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                if r_idx % 2 == 1:
+                    _set_cell_shading(cell, "F9FAFB")
+
+    for _ in range(3):
+        doc.add_paragraph("")
+
+    # ── FOOTER DISCLAIMER ────────────────────────────────────────────────
+    footer_tbl = doc.add_table(rows=1, cols=1)
+    fc = footer_tbl.rows[0].cells[0]
+    _set_cell_shading(fc, "F0F0F0")
+    fp = fc.paragraphs[0]
+    fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    fr = fp.add_run(
+        "This document is prepared for the exclusive use of Vivriti Capital's Credit Committee. "
+        "Distribution outside the committee requires prior written authorization."
+    )
+    fr.font.size = Pt(7.5)
+    fr.font.color.rgb = GREY
 
     _add_page_break(doc)
 

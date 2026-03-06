@@ -77,7 +77,7 @@ export default function Landing() {
       setStageLabel(STAGES[i].label)
       i++
       if (i < STAGES.length) {
-        timersRef.current.push(setTimeout(tick, 9000 + Math.random() * 6000))
+        timersRef.current.push(setTimeout(tick, 5000 + Math.random() * 4000))
       }
     }
     tick()
@@ -243,7 +243,7 @@ export default function Landing() {
                       ))}
                     </div>
                   </div>
-                  <p className="text-xs text-text-muted text-center">Full analysis takes 2-3 minutes · Powered by Gemini AI</p>
+                  <p className="text-xs text-text-muted text-center">Full analysis takes 2-3 minutes</p>
                 </div>
               ) : (
                 /* ── Normal Form ── */
