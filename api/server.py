@@ -54,6 +54,37 @@ app.add_middleware(
 # In-memory store for analysis results (single-user hackathon demo)
 _store: dict = {}
 
+_STORE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
+
+
+def _persist_analysis(analysis_id: str, data: dict) -> None:
+    """Save analysis data to disk so it survives server restarts."""
+    try:
+        os.makedirs(_STORE_DIR, exist_ok=True)
+        path = os.path.join(_STORE_DIR, f"analysis_{analysis_id}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, default=str)
+    except Exception:
+        pass
+
+
+def _load_persisted_stores() -> None:
+    """On startup, reload any previously saved analyses into _store."""
+    try:
+        if not os.path.isdir(_STORE_DIR):
+            return
+        for fname in os.listdir(_STORE_DIR):
+            if fname.startswith("analysis_") and fname.endswith(".json"):
+                aid = fname[len("analysis_"):-len(".json")]
+                path = os.path.join(_STORE_DIR, fname)
+                with open(path, "r", encoding="utf-8") as f:
+                    _store[aid] = json.load(f)
+    except Exception:
+        pass
+
+
+_load_persisted_stores()
+
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -443,6 +474,7 @@ async def load_demo():
     data = _load_demo_data()
     analysis_id = str(uuid.uuid4())[:8]
     _store[analysis_id] = data
+    _persist_analysis(analysis_id, data)
     return {"analysis_id": analysis_id, "data": data}
 
 
@@ -502,6 +534,7 @@ async def analyse(
         data = _adapt_pipeline_results(raw_results)
         analysis_id = str(uuid.uuid4())[:8]
         _store[analysis_id] = data
+        _persist_analysis(analysis_id, data)
 
         return {"analysis_id": analysis_id, "data": data}
 

@@ -14,6 +14,7 @@ Module: modules/person3_llm_cam/research_agent.py
 import os
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TypedDict, Annotated, List, Dict, Any, Optional
 from datetime import datetime
 
@@ -283,13 +284,20 @@ def node_web_research(state: ResearchState) -> ResearchState:
 
     results = {}
     sources = []
-    for key, query in queries.items():
+
+    def _fetch(key_query):
+        key, query = key_query
         logger.info(f"Searching: {query}")
-        search_results = _tavily_search(client, query, max_results=5)
-        results[key] = search_results
-        for r in search_results:
-            if r.get("url"):
-                sources.append(r["url"])
+        return key, _tavily_search(client, query, max_results=5)
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {pool.submit(_fetch, item): item[0] for item in queries.items()}
+        for future in as_completed(futures):
+            key, search_results = future.result()
+            results[key] = search_results
+            for r in search_results:
+                if r.get("url"):
+                    sources.append(r["url"])
 
     return {
         **state,
