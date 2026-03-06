@@ -14,12 +14,13 @@ data/processed/
 *.xlsx
 *.pdf
 
-# Models (too large for git)
-models/
-*.pkl
-*.joblib
-*.pt
-*.pth
+# Models — tracked so Render has them at deploy time
+# models/
+# *.pkl
+# *.joblib
+!models/*.pkl
+!models/*.pt
+!models/*.pth
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
@@ -35,3 +36,5 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+.vercel

@@ -19,7 +19,7 @@ networkx>=3.1
 #  LLM & AGENTS 
 langchain>=0.1.0
 langgraph>=0.0.40
-google-generativeai>=0.7.0
+google-genai>=1.0.0
 tavily-python>=0.3.0
 
 #  SATELLITE IMAGERY 
@@ -39,6 +39,10 @@ transformers>=4.36.0
 
 #  DOCUMENT GENERATION 
 python-docx>=1.1.0
+
+#  PDF PARSING 
+pdfplumber>=0.10.0
+pymupdf>=1.23.0
 
 #  VISUALIZATION 
 plotly>=5.18.0
