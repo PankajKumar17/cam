@@ -137,32 +137,131 @@ def _layer_timer(layer_name: str):
 
 # ── LAYER 1: Person 1 — Financial Forensics & Feature Engineering ────────
 
-def run_layer1_forensics(company_data: dict) -> dict:
+def run_layer1_forensics(company_data: dict, prior_data: Optional[dict] = None) -> dict:
     """
     Run Person 1 forensics: Beneish M-Score, Altman Z-Score, Piotroski F-Score.
-
-    If feature_matrix.csv exists, loads from it; otherwise uses demo financials.
+    Uses the full forensics module (modules/person1_ml_core/forensics.py).
+    Falls back to demo values if something fails.
     """
-    forensics = {
-        "beneish_m_score": company_data.get("beneish_m_score", -2.45),
-        "altman_z_score": company_data.get("altman_z_score", 2.3),
-        "piotroski_f_score": company_data.get("piotroski_f_score", 6),
-        "auditor_distress_score": company_data.get("auditor_distress_score", 1),
-        "going_concern_flag": company_data.get("going_concern_flag", 0),
-        "source": "demo_financials",
-    }
-
     try:
-        from modules.person1_ml_core.feature_engineering import (
-            compute_velocity_features,
-            compute_default_dna,
-        )
-        logger.info("Person 1 feature engineering modules loaded")
-        forensics["source"] = "person1_modules"
-    except ImportError:
-        logger.warning("Person 1 feature engineering not available — using demo data")
+        from modules.person1_ml_core.forensics import run_full_forensics
+        logger.info("Running full forensics module (Beneish + Altman + Piotroski + Auditor)")
+        result = run_full_forensics(company_data, prior=prior_data)
+        # Back-fill company_data with forensic scores for downstream use
+        company_data["beneish_m_score"]     = result["beneish_m_score"]
+        company_data["beneish_manipulation_flag"] = int(result["beneish_flag"] == "MANIPULATOR")
+        company_data["altman_z_score"]      = result["altman_z_score"]
+        company_data["altman_zone"]         = result["altman_zone"]
+        company_data["piotroski_f_score"]   = result["piotroski_f_score"]
+        company_data["beneish_dsri"]        = result.get("beneish_dsri", 1.0)
+        company_data["beneish_tata"]        = result.get("beneish_tata", 0.0)
+        return result
+    except Exception as e:
+        logger.warning(f"Forensics module failed ({e}) — using demo/pre-computed values")
+        return {
+            "beneish_m_score":     company_data.get("beneish_m_score", -2.45),
+            "beneish_flag":        "CLEAN",
+            "altman_z_score":      company_data.get("altman_z_score", 2.3),
+            "altman_zone":         company_data.get("altman_zone", "GREY"),
+            "piotroski_f_score":   company_data.get("piotroski_f_score", 6),
+            "piotroski_strength":  "MODERATE",
+            "auditor_distress_score": company_data.get("auditor_distress_score", 1),
+            "going_concern_flag":  company_data.get("going_concern_flag", 0),
+            "overall_forensic_risk": "MEDIUM",
+            "risk_factors":        [],
+            "source": "demo_fallback",
+        }
 
-    return forensics
+
+# ── LAYER 1b: MCA + Legal Inspection ─────────────────────────────────────
+
+def run_layer1b_mca_legal(
+    company_name: str,
+    company_data: dict,
+    pdf_results: Optional[dict] = None,
+) -> dict:
+    """
+    Run MCA filing + legal dispute intelligence.
+    Integrates PDF-extracted DINs, CINs, and legal flags if PDFs were uploaded.
+    """
+    try:
+        from modules.person2_alt_data.mca_inspector import run_mca_inspection
+
+        directors = company_data.get("director_names", [])
+        cin = (pdf_results or {}).get("all_cin") or company_data.get("cin")
+
+        result = run_mca_inspection(
+            company_name=company_name,
+            sector=company_data.get("sector", "Manufacturing"),
+            directors=directors,
+            cin=cin,
+            use_web_research=True,
+        )
+        # Propagate key flags back to company_data
+        company_data["din_disqualified_count"] = result.get("din_disqualified_count", 0)
+        company_data["nclt_case_flag"]         = int(bool(result.get("nclt_case")))
+        company_data["legal_risk_score"]       = result.get("legal_risk_score", 0)
+
+        # Merge any PDF-sourced legal risks
+        if pdf_results and pdf_results.get("regulatory_risks"):
+            result.setdefault("risk_factors", [])
+            result["risk_factors"] += pdf_results["regulatory_risks"][:5]
+
+        return result
+    except Exception as e:
+        logger.warning(f"MCA inspection failed ({e}) — using defaults")
+        return {
+            "company_name": company_name,
+            "legal_risk_score": 0,
+            "legal_risk_level": "LOW",
+            "risk_factors": [],
+            "din_disqualified_count": company_data.get("din_disqualified_count", 0),
+            "nclt_case": None,
+            "legal_cases": [],
+            "charges": [],
+            "summary": "MCA inspection unavailable — defaults used",
+        }
+
+
+# ── LAYER 1c: Bank Statement & Circular Trading Analysis ─────────────────
+
+def run_layer1c_bank_analysis(company_name: str, company_data: dict) -> dict:
+    """
+    Run bank statement circular trading detection and GSTR-2A/3B reconciliation.
+    """
+    try:
+        from modules.person2_alt_data.bank_statement_analyzer import analyze_bank_statements
+
+        result = analyze_bank_statements(
+            company_name=company_name,
+            revenue_cr=company_data.get("revenue", 850.0),
+            gst_3b_revenue_cr=company_data.get("gst_revenue_cr"),
+            gst_3b_itc_claimed_cr=company_data.get("gst_itc_claimed_cr"),
+            gst_2a_itc_available_cr=company_data.get("gst_2a_itc_available_cr"),
+        )
+
+        # Back-fill company_data with bank analysis flags
+        company_data["circular_trading_score"]  = result.get("circular_trading_score", 0)
+        company_data["gst_2a_3b_risk_level"]    = result.get("gst_2a_3b_risk_level", "LOW")
+        company_data["gst_vs_bank_divergence"]  = max(
+            company_data.get("gst_vs_bank_divergence", 0),
+            result.get("revenue_divergence_pct", 0),
+        )
+        company_data["bounce_count_12m"]        = result.get("bounce_count_12m", 0)
+        return result
+    except Exception as e:
+        logger.warning(f"Bank analysis failed ({e}) — using defaults")
+        return {
+            "company_name": company_name,
+            "overall_bank_risk_score": 0,
+            "overall_bank_risk_level": "LOW",
+            "circular_trading_score": 0,
+            "circular_detected": False,
+            "gst_2a_3b_risk_level": "LOW",
+            "revenue_divergence_pct": 0,
+            "itc_match_pct": 100,
+            "all_risk_flags": [],
+        }
 
 
 # ── LAYER 2: Person 1 — ML Credit Scoring ────────────────────────────────
@@ -463,16 +562,22 @@ def run_pipeline(
     output_dir: str = "data/processed/",
     ceo_audio_path: Optional[str] = None,
     ceo_transcript: Optional[str] = None,
+    pdf_paths: Optional[list] = None,
+    qualitative_notes: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Full end-to-end pipeline: Person 1 → Person 2 → Person 3 → CAM DOCX.
+    Full end-to-end pipeline: PDF → Person 1 → Person 2 → Person 3 → CAM DOCX.
 
     Args:
-        company_name:    Borrower company name
-        company_data:    Financial data dict (None → uses Sunrise demo data)
-        output_dir:      Directory for output files
-        ceo_audio_path:  Optional path to CEO interview audio file
-        ceo_transcript:  Optional pre-transcribed CEO interview text
+        company_name:      Borrower company name
+        company_data:      Financial data dict (None → uses Sunrise demo data)
+        output_dir:        Directory for output files
+        ceo_audio_path:    Optional path to CEO interview audio file
+        ceo_transcript:    Optional pre-transcribed CEO interview text
+        pdf_paths:         Optional list of PDF file paths (annual reports,
+                           legal notices, sanction letters)
+        qualitative_notes: Free-text credit officer field observations
+                           e.g. "Factory at 40% capacity; management evasive"
 
     Returns:
         Complete pipeline results dict with all layer outputs
@@ -489,15 +594,41 @@ def run_pipeline(
     if company_data is None:
         company_data = SUNRISE_DEMO_FINANCIALS.copy()
     company_data["company_name"] = company_name
+    if qualitative_notes:
+        company_data["qualitative_notes"] = qualitative_notes
 
     results = {"company_name": company_name, "company_data": company_data}
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  LAYER 0: PDF DOCUMENT PARSING (if documents supplied)
+    # ══════════════════════════════════════════════════════════════════════
+
+    pdf_results: Optional[dict] = None
+    if pdf_paths:
+        with _layer_timer("LAYER 0 — PDF Document Parsing"):
+            try:
+                from pipeline.pdf_parser import parse_multiple_pdfs
+                pdf_results = parse_multiple_pdfs(pdf_paths, company_name=company_name)
+                results["pdf_analysis"] = pdf_results
+                # Merge extracted financials into company_data (don't overwrite)
+                for k, v in (pdf_results.get("merged_financials") or {}).items():
+                    company_data.setdefault(k, v)
+                logger.info(
+                    f"PDF parsing: {len(pdf_paths)} documents, "
+                    f"{len(pdf_results.get('document_types', []))} types detected"
+                )
+            except Exception as e:
+                logger.warning(f"PDF parsing failed ({e}) — continuing without PDF data")
+    else:
+        results["pdf_analysis"] = None
 
     # ══════════════════════════════════════════════════════════════════════
     #  PERSON 1: ML CORE
     # ══════════════════════════════════════════════════════════════════════
 
     with _layer_timer("LAYER 1 — Financial Forensics (Person 1)"):
-        results["forensics"] = run_layer1_forensics(company_data)
+        prior_data = company_data.get("prior_year_financials")
+        results["forensics"] = run_layer1_forensics(company_data, prior_data=prior_data)
 
     with _layer_timer("LAYER 2 — ML Credit Scoring (Person 1)"):
         results["ml_scores"] = run_layer2_ml_scoring(company_data)
@@ -522,6 +653,11 @@ def run_pipeline(
     company_data["promoter_total_companies"] = results["network"].get("promoter_total_companies", 0)
     company_data["promoter_npa_companies"] = results["network"].get("promoter_npa_companies", 0)
 
+    with _layer_timer("LAYER 4b — MCA + Legal Inspection (Person 2)"):
+        results["mca_legal"] = run_layer1b_mca_legal(
+            company_name, company_data, pdf_results=pdf_results
+        )
+
     with _layer_timer("LAYER 5 — Satellite + GST Intelligence (Person 2)"):
         sat_gst = run_layer5_satellite_gst(company_name, company_data.get("revenue", 850.0))
         results["satellite"] = sat_gst["satellite"]
@@ -539,6 +675,9 @@ def run_pipeline(
     company_data["gst_payment_delay_days"] = results["gst"].get("avg_filing_delay_days", 0)
     company_data["gst_health_score"] = results["gst"].get("gst_health_score", 80)
 
+    with _layer_timer("LAYER 5b — Bank Statement & Circular Trading (Person 2)"):
+        results["bank_analysis"] = run_layer1c_bank_analysis(company_name, company_data)
+
     with _layer_timer("LAYER 6 — Stress Test + DNA Matching (Person 2)"):
         stress_dna = run_layer6_stress_dna(company_data)
         results["stress_test"] = stress_dna["stress_test"]
@@ -552,6 +691,10 @@ def run_pipeline(
         results["research"] = run_layer7_research(
             company_name, company_data.get("sector", "Industrial")
         )
+
+    # Inject qualitative notes into research context so LLM agents see them
+    if qualitative_notes:
+        results["research"]["credit_officer_notes"] = qualitative_notes
 
     with _layer_timer("LAYER 8 — CEO Interview Analysis (Person 3)"):
         results["ceo_interview"] = run_layer8_ceo_interview(
@@ -605,6 +748,10 @@ def run_pipeline(
                 "closest_default_archetype": results["dna_match"].get("closest_archetype", "N/A"),
                 "max_archetype_similarity": results["dna_match"].get("max_similarity", 0),
             },
+            "mca_legal": results.get("mca_legal", {}),
+            "bank_analysis": results.get("bank_analysis", {}),
+            "pdf_analysis": results.get("pdf_analysis"),
+            "qualitative_notes": qualitative_notes,
             "research": results["research"],
             "ceo_interview": results["ceo_interview"],
             "bull_case": results["bull_case"],

@@ -374,50 +374,6 @@ def generate_cover_page(doc, data: dict):
     )
     dec_rgb = _risk_color(decision)
 
-    # ── TOP HEADER BANNER (full-width navy table) ────────────────────────
-    header_tbl = doc.add_table(rows=1, cols=2)
-    header_tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
-    # Left cell — firm name
-    lc = header_tbl.rows[0].cells[0]
-    _set_cell_shading(lc, "0A1F3C")
-    lc.width = Cm(13)
-    lp = lc.paragraphs[0]
-    lp.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    lr = lp.add_run("YAKṢARĀJA")
-    lr.bold = True
-    lr.font.size = Pt(18)
-    lr.font.color.rgb = WHITE
-    lp2 = lc.add_paragraph()
-    lr2 = lp2.add_run("AI Credit Decisioning Engine")
-    lr2.font.size = Pt(9)
-    lr2.font.color.rgb = RGBColor(0xB0, 0xC4, 0xDE)
-    lp2.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    # Right cell — date + confidential
-    rc = header_tbl.rows[0].cells[1]
-    _set_cell_shading(rc, "0A1F3C")
-    rc.width = Cm(7)
-    rp = rc.paragraphs[0]
-    rp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    rr = rp.add_run(datetime.now().strftime("%d %B %Y"))
-    rr.font.size = Pt(10)
-    rr.font.color.rgb = RGBColor(0xB0, 0xC4, 0xDE)
-    rp2 = rc.add_paragraph()
-    rr2 = rp2.add_run("STRICTLY CONFIDENTIAL")
-    rr2.font.size = Pt(8)
-    rr2.bold = True
-    rr2.font.color.rgb = RGBColor(0xFF, 0xA0, 0x70)
-    rp2.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-
-    doc.add_paragraph("")
-
-    # ── ORANGE ACCENT LINE ───────────────────────────────────────────────
-    accent_tbl = doc.add_table(rows=1, cols=1)
-    acc_cell = accent_tbl.rows[0].cells[0]
-    _set_cell_shading(acc_cell, "E86C00")
-    acc_cell.paragraphs[0].add_run(" ")
-    for row in accent_tbl.rows:
-        row.height = Cm(0.15)
-
     # ── MAIN TITLE ───────────────────────────────────────────────────────
     for _ in range(2):
         doc.add_paragraph("")
@@ -515,19 +471,6 @@ def generate_cover_page(doc, data: dict):
 
     for _ in range(3):
         doc.add_paragraph("")
-
-    # ── FOOTER DISCLAIMER ────────────────────────────────────────────────
-    footer_tbl = doc.add_table(rows=1, cols=1)
-    fc = footer_tbl.rows[0].cells[0]
-    _set_cell_shading(fc, "F0F0F0")
-    fp = fc.paragraphs[0]
-    fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    fr = fp.add_run(
-        "This document is prepared for the exclusive use of Vivriti Capital's Credit Committee. "
-        "Distribution outside the committee requires prior written authorization."
-    )
-    fr.font.size = Pt(7.5)
-    fr.font.color.rgb = GREY
 
     _add_page_break(doc)
 
