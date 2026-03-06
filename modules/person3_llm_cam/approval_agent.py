@@ -287,17 +287,20 @@ def _call_gemini_with_retry(
             return response.text.strip()
         except Exception as e:
             err = str(e).lower()
+            if "503" in err or "unavailable" in err or "service unavailable" in err:
+                logger.warning(f"Gemini service unavailable — using fallback immediately")
+                return None
             if "429" in err or "quota" in err or "resource exhausted" in err:
-                wait = 60
+                wait = 15
                 logger.warning(f"Rate limit hit (attempt {attempt}/{max_retries}) — waiting {wait}s before retry...")
                 time.sleep(wait)
             elif attempt < max_retries:
                 logger.warning(f"Gemini API error (attempt {attempt}/{max_retries}): {e}")
-                time.sleep(2 ** attempt)
+                time.sleep(2)
             else:
                 logger.error(f"Gemini API error (attempt {attempt}/{max_retries}): {e}")
 
-    logger.error("All Gemini API retries exhausted")
+    logger.error("All Gemini API retries exhausted — using fallback")
     return None
 
 
@@ -447,7 +450,7 @@ def write_bull_case(company_data: dict, research: dict) -> str:
             api_key=api_key,
             system_prompt=APPROVAL_SYSTEM_PROMPT,
             user_prompt=user_prompt,
-            max_retries=3,
+            max_retries=2,
             max_tokens=2048,
         )
         if result:

@@ -1,21 +1,22 @@
-﻿"""
-Yaká¹£arÄja €” CAM Document Generator (Person 3)
+"""
+Yakṣarāja — CAM Document Generator (Person 3)
 =====================================================
 Assembles ALL outputs from Person 1 (ML Core) + Person 2 (Alt Data) +
 Person 3 (LLM Agents) into a professional Credit Appraisal Memo (CAM)
 as a DOCX file.
 
 Parts:
-  A €” Data assembly from pipeline
-  B €” 11 section-generator functions
-  C €” DOCX assembly with professional styling
-  D €” Save DOCX + summary JSON
+  A — Data assembly from pipeline
+  B — 11 section-generator functions
+  C — DOCX assembly with professional styling
+  D — Save DOCX + summary JSON
 
 Author: Person 3
 Module: modules/person3_llm_cam/cam_generator.py
 """
 
 import os
+import re
 import json
 from datetime import datetime
 from pathlib import Path
@@ -33,13 +34,13 @@ try:
     from docx.oxml import parse_xml
     DOCX_AVAILABLE = True
 except ImportError:
-    logger.warning("python-docx not installed €” CAM generation will be unavailable")
+    logger.warning("python-docx not installed — CAM generation will be unavailable")
     DOCX_AVAILABLE = False
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
 # •‘  CONSTANTS & COLORS                                                       •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 # Vivriti Capital inspired palette
 NAVY        = RGBColor(0x0A, 0x1F, 0x3C) if DOCX_AVAILABLE else None
@@ -57,9 +58,9 @@ HEADER_BG   = "0A1F3C"  # hex for XML shading
 ROW_ALT_BG  = "F5F5F5"
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
 # •‘  HELPER: SAFE DATA ACCESS                                                •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def _g(data: dict, *keys, default="Not Given"):
     """Safely get nested values: _g(data, 'ml_scores', 'ensemble_pd', default=0)."""
@@ -108,15 +109,15 @@ def _risk_color(level: str):
         return GREEN
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
 # •‘  CONSISTENCY VALIDATION (Rules 4, 5, 6, 7)                                •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def validate_cam_consistency(data: dict) -> list:
     """
     Validate CAM data for internal consistency before document assembly.
     Returns a list of warning/error dicts: {"rule": str, "level": str, "message": str}.
-    Also mutates data to enforce mandatory corrections (e.g., DSCR < 1.0 †’ REJECT).
+    Also mutates data to enforce mandatory corrections (e.g., DSCR < 1.0 → REJECT).
     """
     issues = []
     fin = data.get("financial_data", {})
@@ -129,12 +130,12 @@ def validate_cam_consistency(data: dict) -> list:
     decision = rec.get("lending_decision", ml.get("lending_decision", ""))
     cfo = fin.get("cfo")
 
-    # Rule 4a: DSCR < 1.0 †’ must be REJECT
+    # Rule 4a: DSCR < 1.0 → must be REJECT
     if dscr is not None and float(dscr) < 1.0 and decision != "REJECT":
         issues.append({
             "rule": "4a",
             "level": "CRITICAL",
-            "message": f"DSCR {dscr:.2f}x < 1.0 but decision is {decision} €” forcing REJECT",
+            "message": f"DSCR {dscr:.2f}x < 1.0 but decision is {decision} — forcing REJECT",
         })
         if isinstance(rec, dict):
             rec["lending_decision"] = "REJECT"
@@ -148,21 +149,21 @@ def validate_cam_consistency(data: dict) -> list:
             issues.append({
                 "rule": "4c",
                 "level": "WARNING",
-                "message": f"Gross margin {gross_margin:.1%} is negative but EBITDA margin {ebitda_margin:.1%} is positive €” check data",
+                "message": f"Gross margin {gross_margin:.1%} is negative but EBITDA margin {ebitda_margin:.1%} is positive — check data",
             })
 
-    # Rule 4e: PD > 40% †’ must be REJECT
+    # Rule 4e: PD > 40% → must be REJECT
     if pd_val is not None and float(pd_val) > 0.40 and decision != "REJECT":
         issues.append({
             "rule": "4e",
             "level": "CRITICAL",
-            "message": f"PD {pd_val:.2%} > 40% but decision is {decision} €” forcing REJECT",
+            "message": f"PD {pd_val:.2%} > 40% but decision is {decision} — forcing REJECT",
         })
         if isinstance(rec, dict):
             rec["lending_decision"] = "REJECT"
             rec["recommended_limit_cr"] = 0.0
 
-    # Rule 6: Strong positive CFO †’ no close default archetype
+    # Rule 6: Strong positive CFO → no close default archetype
     dna = data.get("dna_match", {})
     if cfo is not None and float(cfo) > 0:
         closest = dna.get("closest_default_archetype", "")
@@ -170,7 +171,7 @@ def validate_cam_consistency(data: dict) -> list:
             issues.append({
                 "rule": "6",
                 "level": "WARNING",
-                "message": f"CFO is positive (₹{cfo:.1f} Cr) but default archetype is '{closest}' €” overriding to 'None (Healthy)'",
+                "message": f"CFO is positive (₹{cfo:.1f} Cr) but default archetype is '{closest}' — overriding to 'None (Healthy)'",
             })
             dna["closest_default_archetype"] = "None (Healthy)"
 
@@ -180,7 +181,7 @@ def validate_cam_consistency(data: dict) -> list:
         issues.append({
             "rule": "7",
             "level": "INFO",
-            "message": "Promoter holding percentage not provided €” will show as N/A",
+            "message": "Promoter holding percentage not provided — will show as N/A",
         })
 
     # Log all issues
@@ -191,9 +192,9 @@ def validate_cam_consistency(data: dict) -> list:
     return issues
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
 # •‘  DOCX STYLING HELPERS                                                     •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def _set_cell_shading(cell, hex_color: str):
     """Apply background shading to a table cell."""
@@ -223,6 +224,53 @@ def _add_para(doc, text: str, bold: bool = False, italic: bool = False,
         para.alignment = alignment
     para.paragraph_format.space_after = Pt(space_after)
     return para
+
+
+def _add_md_inline_para(doc, text: str, base_size: int = 10, color=None, space_after: int = 4):
+    """Add a paragraph with **bold** inline markdown rendered as actual bold runs."""
+    para = doc.add_paragraph()
+    para.paragraph_format.space_after = Pt(space_after)
+    parts = re.split(r'\*\*(.*?)\*\*', text)
+    for i, part in enumerate(parts):
+        if not part:
+            continue
+        run = para.add_run(part)
+        run.font.size = Pt(base_size)
+        run.bold = (i % 2 == 1)  # odd indices are inside **
+        if color:
+            run.font.color.rgb = color
+    return para
+
+
+def _add_md_line(doc, line: str, heading_color=None, text_color=None, base_size: int = 10):
+    """
+    Parse one markdown-formatted line and add it as a styled DOCX paragraph.
+    Handles: # headings, * / - bullets, **inline bold**, --- separators.
+    """
+    line = line.strip()
+    if not line or re.match(r'^-{3,}$', line) or re.match(r'^={3,}$', line):
+        return  # Skip empty lines and horizontal rules
+
+    # Detect heading level (# / ## / ### / ####)
+    hm = re.match(r'^(#{1,4})\s+(.*)', line)
+    if hm:
+        level = len(hm.group(1))
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', hm.group(2)).strip()
+        text = re.sub(r'\*(.*?)\*', r'\1', text).strip()
+        sizes = {1: base_size + 4, 2: base_size + 2, 3: base_size + 1, 4: base_size}
+        _add_para(doc, text, bold=True, size=sizes.get(level, base_size),
+                  color=heading_color, space_after=3)
+        return
+
+    # Detect bullet point (* or - or •, optionally indented)
+    bm = re.match(r'^[ \t]*[*\-•]\s+(.*)', line)
+    if bm:
+        _add_md_inline_para(doc, f"  \u2022 {bm.group(1).strip()}",
+                            base_size=base_size - 1, color=text_color, space_after=2)
+        return
+
+    # Regular paragraph with possible inline bold
+    _add_md_inline_para(doc, line, base_size=base_size, color=text_color, space_after=4)
 
 
 def _add_key_value(doc, key: str, value: str, color=None):
@@ -283,10 +331,10 @@ def _create_table(doc, headers: list, rows: list, col_widths: list = None):
 
 
 def _add_risk_badge(doc, label: str, level: str):
-    """Add a colored risk indicator line: — LABEL: LEVEL."""
+    """Add a colored risk indicator line: — LABEL: LEVEL."""
     color = _risk_color(level)
     para = doc.add_paragraph()
-    indicator = para.add_run("— ")
+    indicator = para.add_run("— ")
     indicator.font.color.rgb = color
     indicator.font.size = Pt(11)
     indicator.bold = True
@@ -305,9 +353,9 @@ def _add_page_break(doc):
     doc.add_page_break()
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 1 €” COVER PAGE                                                  •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 1 — COVER PAGE                                                  •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_cover_page(doc, data: dict):
     """Generate the CAM cover page with title, company, date, confidentiality."""
@@ -384,9 +432,9 @@ def generate_cover_page(doc, data: dict):
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 2 €” EXECUTIVE SUMMARY                                           •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 2 — EXECUTIVE SUMMARY                                           •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_executive_summary(doc, data: dict):
     """Decision, limit, rate, and key points at a glance."""
@@ -413,7 +461,7 @@ def generate_executive_summary(doc, data: dict):
     if conditions and isinstance(conditions, list):
         _add_para(doc, "Key Conditions:", bold=True, size=10, space_after=2)
         for cond in conditions:
-            _add_para(doc, f"  €¢ {cond}", size=9, space_after=1)
+            _add_para(doc, f"  • {cond}", size=9, space_after=1)
 
     # Final rationale
     rationale = _g(rec, "final_rationale", default="")
@@ -425,9 +473,9 @@ def generate_executive_summary(doc, data: dict):
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 3 €” COMPANY BACKGROUND                                          •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 3 — COMPANY BACKGROUND                                          •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_company_background(doc, data: dict):
     """Sector, history, ownership structure."""
@@ -447,7 +495,8 @@ def generate_company_background(doc, data: dict):
     news = _g(research, "company_news_summary", default="")
     if news and news not in ("N/A", "Not Given"):
         _add_styled_heading(doc, "Industry & Market Context", level=2)
-        _add_para(doc, str(news), size=10)
+        for line in str(news).split("\n"):
+            _add_md_line(doc, line, heading_color=DARK_BLUE, text_color=BLACK, base_size=10)
 
     _add_key_value(doc, "Industry Outlook", _g(research, "industry_outlook", default="Not Given"),
                    color=_risk_color(_g(research, "industry_outlook", default="NEUTRAL")))
@@ -455,9 +504,9 @@ def generate_company_background(doc, data: dict):
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 4 €” FINANCIAL ANALYSIS                                           •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 4 — FINANCIAL ANALYSIS                                           •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_financial_analysis(doc, data: dict):
     """5-year ratio tables and commentary."""
@@ -546,9 +595,9 @@ def generate_financial_analysis(doc, data: dict):
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 5 €” FINANCIAL FORENSICS                                          •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 5 — FINANCIAL FORENSICS                                          •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_forensics_section(doc, data: dict):
     """Beneish M-Score, Altman Z-Score, Piotroski F-Score, audit flags."""
@@ -609,9 +658,9 @@ def generate_forensics_section(doc, data: dict):
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 6 €” PROMOTER NETWORK ANALYSIS                                    •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 6 — PROMOTER NETWORK ANALYSIS                                    •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_network_section(doc, data: dict):
     """Promoter network description and contagion risk."""
@@ -656,9 +705,9 @@ def generate_network_section(doc, data: dict):
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 7 €” SATELLITE & OPERATIONAL REALITY                              •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 7 — SATELLITE & OPERATIONAL REALITY                              •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_satellite_section(doc, data: dict):
     """Satellite-based operational activity assessment."""
@@ -706,12 +755,12 @@ def generate_satellite_section(doc, data: dict):
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 8 €” STRESS TESTING                                               •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 8 — STRESS TESTING                                               •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_stress_test_section(doc, data: dict):
-    """Monte Carlo stress test results €” P10/P50/P90 and named scenarios."""
+    """Monte Carlo stress test results — P10/P50/P90 and named scenarios."""
     _add_styled_heading(doc, "7. Stress Test Results", level=1)
 
     stress = _g(data, "stress_test", default={})
@@ -770,9 +819,9 @@ def generate_stress_test_section(doc, data: dict):
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 9 €” MANAGEMENT QUALITY (CEO INTERVIEW)                          •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 9 — MANAGEMENT QUALITY (CEO INTERVIEW)                          •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_management_section(doc, data: dict):
     """CEO interview insights and management quality score.
@@ -795,7 +844,7 @@ def generate_management_section(doc, data: dict):
                   size=10, italic=True, color=GREY)
         doc.add_paragraph("")
 
-    _add_para(doc, "Assessment based on structured CEO/promoter interview analysis €” scoring "
+    _add_para(doc, "Assessment based on structured CEO/promoter interview analysis — scoring "
               "consistency between financial data and management narrative.",
               size=10, italic=True)
 
@@ -828,61 +877,45 @@ def generate_management_section(doc, data: dict):
         _add_para(doc, "Interview Red Flags:", bold=True, size=10, color=RED)
         for flag in flags:
             if isinstance(flag, dict):
-                _add_para(doc, f"  ðŸš© [{_g(flag, 'severity')}] {_g(flag, 'description')}",
+                _add_para(doc, f"  🚩 [{_g(flag, 'severity')}] {_g(flag, 'description')}",
                           size=9, color=RED)
 
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 10 €” BULL VS BEAR (ADVERSARIAL DEBATE)                          •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 10 — BULL VS BEAR (ADVERSARIAL DEBATE)                          •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_bull_bear_section(doc, data: dict):
     """Side-by-side adversarial bull and bear case arguments."""
     _add_styled_heading(doc, "9. Adversarial Credit Committee Debate", level=1)
 
-    _add_para(doc, "Two independent LLM agents debated this application €” one building "
+    _add_para(doc, "Two independent LLM agents debated this application — one building "
               "the strongest case for approval, the other seeking every reason to reject. "
               "This mirrors real credit committee dynamics with a devil's advocate.",
               size=10, italic=True)
 
     # Bull case
-    _add_styled_heading(doc, "ðŸŸ¢ Bull Case (Approval Agent)", level=2)
+    _add_styled_heading(doc, "🟢 Bull Case (Approval Agent)", level=2)
     bull = _g(data, "bull_case", default="Bull case not available.")
     for line in str(bull).split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        if line.startswith("##"):
-            _add_para(doc, line.replace("##", "").strip(), bold=True, size=11, color=GREEN)
-        elif line.startswith("-") or line.startswith("€¢") or line.startswith("   -"):
-            _add_para(doc, f"  {line}", size=9, space_after=2)
-        else:
-            _add_para(doc, line, size=10, space_after=3)
+        _add_md_line(doc, line, heading_color=GREEN, text_color=None, base_size=10)
 
     _add_page_break(doc)
 
     # Bear case
-    _add_styled_heading(doc, "ðŸ”´ Bear Case (Dissent Agent)", level=2)
+    _add_styled_heading(doc, "🔴 Bear Case (Dissent Agent)", level=2)
     bear = _g(data, "bear_case", default="Bear case not available.")
     for line in str(bear).split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        if line.startswith("##"):
-            _add_para(doc, line.replace("##", "").strip(), bold=True, size=11, color=RED)
-        elif line.startswith("-") or line.startswith("€¢") or line.startswith("   -"):
-            _add_para(doc, f"  {line}", size=9, space_after=2)
-        else:
-            _add_para(doc, line, size=10, space_after=3)
+        _add_md_line(doc, line, heading_color=RED, text_color=None, base_size=10)
 
     _add_page_break(doc)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  SECTION 11 €” FINAL RECOMMENDATION                                        •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  SECTION 11 — FINAL RECOMMENDATION                                        •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_recommendation(doc, data: dict):
     """Final verdict with conditions and signatures."""
@@ -942,13 +975,13 @@ def generate_recommendation(doc, data: dict):
                 run.font.size = Pt(8)
 
     doc.add_paragraph("")
-    _add_para(doc, "€” End of Credit Appraisal Memorandum €”",
+    _add_para(doc, "— End of Credit Appraisal Memorandum —",
               size=10, italic=True, color=GREY, alignment=WD_ALIGN_PARAGRAPH.CENTER)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  PART C €” DOCX ASSEMBLY                                                   •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  PART C — DOCX ASSEMBLY                                                   •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def _setup_document() -> Any:
     """Create a new Document with professional styling and page setup."""
@@ -990,7 +1023,7 @@ def _add_header_footer(doc, company_name: str):
         header = section.header
         header_para = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
         header_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        run = header_para.add_run(f"CONFIDENTIAL €” {company_name} €” Credit Appraisal Memo")
+        run = header_para.add_run(f"CONFIDENTIAL — {company_name} — Credit Appraisal Memo")
         run.font.size = Pt(7)
         run.font.color.rgb = GREY
         run.italic = True
@@ -999,7 +1032,7 @@ def _add_header_footer(doc, company_name: str):
         footer = section.footer
         footer_para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
         footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = footer_para.add_run("Yaká¹£arÄja | Vivriti Capital | Page ")
+        run = footer_para.add_run("Yakṣarāja | Vivriti Capital | Page ")
         run.font.size = Pt(7)
         run.font.color.rgb = GREY
         # Page number field
@@ -1010,9 +1043,9 @@ def _add_header_footer(doc, company_name: str):
         footer_para._p.append(fld)
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  PART D €” SAVE OUTPUT (DOCX + JSON)                                       •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  PART D — SAVE OUTPUT (DOCX + JSON)                                       •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def _save_summary_json(data: dict, output_dir: str) -> str:
     """Save a summary scores JSON alongside the DOCX."""
@@ -1055,9 +1088,9 @@ def _save_summary_json(data: dict, output_dir: str) -> str:
     return json_path
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
 # •‘  MAIN ENTRY POINT                                                         •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 def generate_cam(
     all_data: dict,
@@ -1096,7 +1129,7 @@ def generate_cam(
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
-    # ”€”€ Build the DOCX ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
+    # ”—€ Build the DOCX ”——————————————————————————————————————————————————€
     doc = _setup_document()
 
     # Convert financial_data from pd.Series to dict if needed
@@ -1104,7 +1137,7 @@ def generate_cam(
     if hasattr(fin_data, "to_dict"):
         all_data["financial_data"] = fin_data.to_dict()
 
-    # ”€”€ Run consistency validation (Rules 4, 5, 6, 7) ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
+    # ”—€ Run consistency validation (Rules 4, 5, 6, 7) ”———————————————————€
     logger.info("Running CAM consistency validation...")
     validation_issues = validate_cam_consistency(all_data)
     if validation_issues:
@@ -1146,7 +1179,7 @@ def generate_cam(
     # Add headers/footers
     _add_header_footer(doc, str(company_name))
 
-    # ”€”€ Save DOCX ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
+    # ”—€ Save DOCX ”———————————————————————————————————————————————————————€
     docx_filename = f"CAM_{safe_name}_{date_str}.docx"
     docx_path = os.path.join(output_dir, docx_filename)
 
@@ -1158,7 +1191,7 @@ def generate_cam(
         logger.error(f"Failed to save DOCX: {e}")
         return ""
 
-    # ”€”€ Save summary JSON ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
+    # ”—€ Save summary JSON ”———————————————————————————————————————————————€
     json_path = _save_summary_json(all_data, output_dir)
 
     logger.info(f"{'='*60}")
@@ -1170,13 +1203,13 @@ def generate_cam(
     return docx_path
 
 
-# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
-# •‘  CLI €” STANDALONE TEST                                                    •‘
-# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+# •”•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••—
+# •‘  CLI — STANDALONE TEST                                                    •‘
+# •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("CAM GENERATOR €” Standalone Test (Demo Data)")
+    print("CAM GENERATOR — Standalone Test (Demo Data)")
     print("=" * 60)
 
     demo_data = {
@@ -1269,7 +1302,7 @@ if __name__ == "__main__":
             "recommended_limit_cr": 187.0,
             "recommended_rate_pct": 10.0,
             "key_conditions": [
-                "DSCR floor covenant at 1.20x €” quarterly monitoring",
+                "DSCR floor covenant at 1.20x — quarterly monitoring",
                 "Promoter personal guarantee covering 50% of exposure",
                 "Quarterly GST cross-verification with bank statements",
                 "Annual credit review with fresh financials",
@@ -1288,7 +1321,7 @@ if __name__ == "__main__":
     if path:
         print(f"\nœ… Demo CAM generated: {path}")
     else:
-        print("\nŒ CAM generation failed")
+        print("\nŒ CAM generation failed")
     print("=" * 60)
 
 

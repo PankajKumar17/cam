@@ -207,10 +207,21 @@ def run_layer2_ml_scoring(company_data: dict) -> dict:
     de = company_data.get("debt_to_equity", 1.5)
     altman = company_data.get("altman_z_score", 2.5)
 
-    # Simple logistic heuristic
-    z = -1.5 + 0.8 * (2.0 - dscr) + 0.4 * (de - 1.0) + 0.3 * (2.5 - altman)
-    pd_score = 1.0 / (1.0 + np.exp(-z))
-    pd_score = round(float(np.clip(pd_score, 0.01, 0.99)), 4)
+    # Per-model heuristics with genuinely different feature emphasis
+    # XGBoost: stronger weight on leverage (D/E) and Altman Z
+    z_xgb = -1.5 + 0.5 * (2.0 - dscr) + 0.6 * (de - 1.0) + 0.4 * (2.5 - altman)
+    pd_xgb = round(float(np.clip(1.0 / (1.0 + np.exp(-z_xgb)), 0.01, 0.99)), 4)
+
+    # Random Forest: balanced across DSCR, leverage & interest coverage
+    z_rf = -1.5 + 0.8 * (2.0 - dscr) + 0.4 * (de - 1.0) + 0.2 * (2.5 - altman) - 0.3 * max(0, icr - 2.0)
+    pd_rf = round(float(np.clip(1.0 / (1.0 + np.exp(-z_rf)), 0.01, 0.99)), 4)
+
+    # LightGBM: heavier weight on DSCR and interest coverage, lighter on leverage
+    z_lgb = -1.5 + 1.0 * (2.0 - dscr) + 0.2 * (de - 1.0) + 0.1 * (2.5 - altman) - 0.5 * max(0, icr - 2.0)
+    pd_lgb = round(float(np.clip(1.0 / (1.0 + np.exp(-z_lgb)), 0.01, 0.99)), 4)
+
+    # Ensemble: weighted average (XGB 35%, RF 35%, LGB 30%)
+    pd_score = round(0.35 * pd_xgb + 0.35 * pd_rf + 0.30 * pd_lgb, 4)
 
     if pd_score < 0.20:
         decision = "APPROVE"
@@ -225,9 +236,9 @@ def run_layer2_ml_scoring(company_data: dict) -> dict:
 
     return {
         "ensemble_pd": pd_score,
-        "pd_xgb": round(pd_score * 0.95, 4),
-        "pd_rf": round(pd_score * 1.05, 4),
-        "pd_lgb": round(pd_score * 1.02, 4),
+        "pd_xgb": pd_xgb,
+        "pd_rf": pd_rf,
+        "pd_lgb": pd_lgb,
         "lending_decision": decision,
         "credit_limit_cr": max(0, credit_limit),
         "risk_premium": risk_premium,
@@ -239,11 +250,13 @@ def run_layer2_ml_scoring(company_data: dict) -> dict:
 
 # ── LAYER 3: Person 1 — Temporal LSTM Trajectory ─────────────────────────
 
-def run_layer3_trajectory(company_name: str) -> dict:
+def run_layer3_trajectory(company_name: str, company_data: dict = None) -> dict:
     """
     Run Person 1 LSTM trajectory early-warning system.
 
-    Requires 5 years of data in feature_matrix.csv. Falls back to demo.
+    Requires 5 years of data in feature_matrix.csv.
+    Falls back to multi-year history extracted by the Excel parser, or
+    synthetic demo values as last resort.
     """
     try:
         from modules.person1_ml_core.temporal_model import get_trajectory_score
@@ -253,20 +266,41 @@ def run_layer3_trajectory(company_name: str) -> dict:
             if "error" not in result:
                 logger.info(f"Trajectory: {result['warning_level']} "
                             f"(risk={result['trajectory_risk_score']:.4f})")
+                # Inject multi-year history from parser if LSTM didn't provide it
+                if not result.get("fiscal_years") and company_data:
+                    result["fiscal_years"]  = company_data.get("fiscal_years", [])
+                    result["dscr_history"]  = company_data.get("dscr_history", [])
                 return result
     except Exception as e:
         logger.warning(f"Trajectory model unavailable: {e}")
 
-    # Demo fallback
+    # Fallback: use real history extracted from the Excel/CSV file
+    cd = company_data or {}
+    dscr_hist = cd.get("dscr_history", [])
+    fy_list   = cd.get("fiscal_years", [])
+    base_year = cd.get("fiscal_year", 2025)
+
+    # If parser gave no history, fall back to synthetic demo data
+    if not dscr_hist or not fy_list:
+        dscr_hist = [1.65, 1.72, 1.78, 1.82, 1.85]
+        fy_list   = [base_year - 4, base_year - 3, base_year - 2, base_year - 1, base_year]
+        source    = "demo_fallback"
+    else:
+        source = "company_data_history"
+
+    velocity = round((dscr_hist[-1] - dscr_hist[0]) / max(len(dscr_hist) - 1, 1), 3) if len(dscr_hist) > 1 else 0.03
+
     return {
         "company_name": company_name,
         "trajectory_risk_score": 0.18,
         "estimated_months_to_distress": 999,
         "warning_level": "GREEN",
-        "dscr_trend": [1.65, 1.72, 1.78, 1.82, 1.85],
-        "dscr_velocity": 0.03,
-        "current_dscr": 1.85,
-        "source": "demo_fallback",
+        "dscr_trend": dscr_hist,
+        "dscr_history": dscr_hist,
+        "fiscal_years": fy_list,
+        "dscr_velocity": velocity,
+        "current_dscr": dscr_hist[-1] if dscr_hist else 1.85,
+        "source": source,
     }
 
 
@@ -358,10 +392,18 @@ def run_layer7_research(company_name: str, sector: str = "Textiles") -> dict:
 
 # ── LAYER 8: Person 3 — CEO Interview Analysis ──────────────────────────
 
-def run_layer8_ceo_interview(company_data: dict) -> dict:
-    """Run Person 3 CEO interview analysis (fallback mode — no audio)."""
+def run_layer8_ceo_interview(
+    company_data: dict,
+    audio_path: Optional[str] = None,
+    transcript: Optional[str] = None,
+) -> dict:
+    """Run Person 3 CEO interview analysis — accepts audio file, transcript, or falls back."""
     from modules.person3_llm_cam.ceo_interview import run_ceo_interview_analysis
-    return run_ceo_interview_analysis(company_data=company_data)
+    return run_ceo_interview_analysis(
+        audio_path=audio_path,
+        transcript=transcript,
+        company_data=company_data,
+    )
 
 
 # ── LAYER 9: Person 3 — Adversarial Bull vs Bear + Recommendation ───────
@@ -412,14 +454,18 @@ def run_pipeline(
     company_name: str = "Sunrise Textile Mills",
     company_data: Optional[Dict[str, Any]] = None,
     output_dir: str = "data/processed/",
+    ceo_audio_path: Optional[str] = None,
+    ceo_transcript: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Full end-to-end pipeline: Person 1 → Person 2 → Person 3 → CAM DOCX.
 
     Args:
-        company_name: Borrower company name
-        company_data: Financial data dict (None → uses Sunrise demo data)
-        output_dir:   Directory for output files
+        company_name:    Borrower company name
+        company_data:    Financial data dict (None → uses Sunrise demo data)
+        output_dir:      Directory for output files
+        ceo_audio_path:  Optional path to CEO interview audio file
+        ceo_transcript:  Optional pre-transcribed CEO interview text
 
     Returns:
         Complete pipeline results dict with all layer outputs
@@ -450,7 +496,7 @@ def run_pipeline(
         results["ml_scores"] = run_layer2_ml_scoring(company_data)
 
     with _layer_timer("LAYER 3 — LSTM Trajectory (Person 1)"):
-        results["trajectory"] = run_layer3_trajectory(company_name)
+        results["trajectory"] = run_layer3_trajectory(company_name, company_data)
 
     # Update company_data with ML scores for downstream layers
     company_data["ensemble_pd"] = results["ml_scores"]["ensemble_pd"]
@@ -501,7 +547,11 @@ def run_pipeline(
         )
 
     with _layer_timer("LAYER 8 — CEO Interview Analysis (Person 3)"):
-        results["ceo_interview"] = run_layer8_ceo_interview(company_data)
+        results["ceo_interview"] = run_layer8_ceo_interview(
+            company_data,
+            audio_path=ceo_audio_path,
+            transcript=ceo_transcript,
+        )
 
     with _layer_timer("LAYER 9 — Adversarial Bull vs Bear (Person 3)"):
         adversarial = run_layer9_adversarial(

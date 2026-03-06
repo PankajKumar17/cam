@@ -108,11 +108,14 @@ def _parse_data_sheet(wb, company_name: str = None) -> dict:
     logger.info(f"Company: {company_name}")
 
     # ── Build row lookup (label → row_index) ─────────────────────────────
+    # Use setdefault (first-wins) so the annual P&L/BS/CF rows always take
+    # precedence over the quarterly section rows that share the same labels
+    # (e.g. "Sales", "Interest", "Net profit") but appear later in the sheet.
     row_map = {}
     for row_idx in range(1, ws.max_row + 1):
         label = ws.cell(row_idx, 1).value
         if label is not None:
-            row_map[str(label).strip().lower()] = row_idx
+            row_map.setdefault(str(label).strip().lower(), row_idx)
 
     # ── Find latest fiscal year column ───────────────────────────────────
     # Report Date row (row 16 for P&L) has datetime objects
@@ -374,9 +377,35 @@ def _parse_data_sheet(wb, company_name: str = None) -> dict:
         "label": 0,
     }
 
+    # ── Multi-year history for trajectory charts ──────────────────────────
+    # Extract DSCR and revenue for every available fiscal year column so
+    # the frontend can plot a proper time-series instead of showing
+    # "Insufficient data".
+    dscr_history = []
+    fiscal_years_list = []
+    revenue_history = []
+    for _col, _yr in sorted(all_cols, key=lambda x: x[1]):
+        _rev  = _get(["Sales", "Revenue", "Net Sales"], _col)
+        _pbt  = _get(["Profit before tax", "PBT"], _col)
+        _dep  = _get(["Depreciation"], _col)
+        _int  = _get(["Interest", "Interest Expense", "Finance Cost"], _col)
+        _pat  = _get(["Net profit", "PAT", "Net Profit"], _col)
+        _borr = _get(["Borrowings", "Total Borrowings"], _col)
+        if _int and _int > 0:
+            _dscr_num = (_pat or 0) + (_dep or 0) + (_int or 0)
+            _dscr_den = _int + (_borr or 0) * 0.15
+            if _dscr_den > 0:
+                dscr_history.append(round(_dscr_num / _dscr_den, 2))
+                fiscal_years_list.append(_yr)
+                revenue_history.append(round(_rev or 0, 2))
+    data["dscr_history"]   = dscr_history
+    data["fiscal_years"]   = fiscal_years_list
+    data["revenue_history"] = revenue_history
+
     logger.info(f"✅ Parsed {company_name}: Revenue=₹{revenue:,.0f} Cr, "
                 f"EBITDA=₹{ebitda:,.0f} Cr, PAT=₹{pat:,.0f} Cr, "
-                f"DSCR={data['dscr']}, D/E={data['debt_to_equity']}")
+                f"DSCR={data['dscr']}, D/E={data['debt_to_equity']}, "
+                f"History years={fiscal_years_list}")
 
     return data
 

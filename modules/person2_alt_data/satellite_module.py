@@ -58,8 +58,8 @@ RANDOM_SEED = 42
 # ── Sentinel Hub configuration ───────────────────────────────────────────
 SENTINEL_CLIENT_ID     = os.getenv("SENTINEL_CLIENT_ID", "")
 SENTINEL_CLIENT_SECRET = os.getenv("SENTINEL_CLIENT_SECRET", "")
-SENTINEL_TOKEN_URL     = "https://services.sentinel-hub.com/oauth/token"
-SENTINEL_PROCESS_URL   = "https://services.sentinel-hub.com/api/v1/process"
+SENTINEL_TOKEN_URL     = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+SENTINEL_PROCESS_URL   = "https://sh.dataspace.copernicus.eu/api/v1/process"
 
 # ── Default test location: factory in Pune, MH ──────────────────────────
 DEFAULT_LAT  = 18.52
@@ -283,13 +283,20 @@ def fetch_satellite_image(
             try:
                 from io import BytesIO
                 try:
+                    import tifffile
+                    arr = tifffile.imread(BytesIO(resp.content)).astype(np.float32)
+                    logger.info(f"Satellite image fetched (tifffile): shape={arr.shape}")
+                    return arr
+                except ImportError:
+                    pass
+                try:
                     from PIL import Image
                     img = Image.open(BytesIO(resp.content))
                     arr = np.array(img, dtype=np.float32)
-                    logger.info(f"Satellite image fetched: shape={arr.shape}")
+                    logger.info(f"Satellite image fetched (PIL): shape={arr.shape}")
                     return arr
-                except ImportError:
-                    # Without PIL, try raw parsing for 4-band float32
+                except (ImportError, Exception):
+                    # Last resort: raw float32 parse
                     raw = np.frombuffer(resp.content, dtype=np.float32)
                     expected = height * width * 4
                     if raw.size >= expected:

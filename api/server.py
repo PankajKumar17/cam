@@ -1,87 +1,72 @@
 """
-Yakṣarāja — Streamlit Dashboard (Person 3 · P3-5)
-========================================================
-Professional hackathon demo dashboard with 4 pages:
-  Page 1 — Upload & Process
-  Page 2 — Credit Decision Dashboard
-  Page 3 — Deep Dive (Financial, Network, Stress, Bull/Bear)
-  Page 4 — Download CAM
-
-Run:
-    streamlit run dashboard/app.py
-
-Author: Person 3
+Yakṣarāja — FastAPI Backend
+============================
+Wraps the existing pipeline modules and serves JSON to the React frontend.
 """
 
 import os
 import sys
 import json
-import time
+import uuid
+import shutil
 import tempfile
-from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
-import numpy as np
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse, Response as RawResponse
+import json as _json
 
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
 
-# ── Make sure project root is on sys.path ────────────────────────────────
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+class UTF8JSONResponse(JSONResponse):
+    """JSONResponse that keeps emoji intact (ensure_ascii=False)."""
+    def render(self, content) -> bytes:
+        return _json.dumps(content, ensure_ascii=False, allow_nan=False, default=str).encode("utf-8")
+
+# ── Project path setup ──────────────────────────────────────────────────
+PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from pipeline.main_pipeline import run_pipeline
+from dotenv import load_dotenv
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+
+from pipeline.main_pipeline import run_pipeline, SUNRISE_DEMO_FINANCIALS
 from pipeline.excel_parser import parse_screener_excel
-from modules.web_data_fetcher import fetch_missing_data, describe_fetched, _is_missing, FETCHABLE_FIELDS
 
-# ╚════════════════════════════════════════════════════════════════════════════╝
+import logging
+logging.getLogger("uvicorn").setLevel(logging.ERROR)
+logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
+logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
 
-def _g(data: dict, *keys, default="N/A"):
-    """Safely get nested values."""
-    current = data
-    for key in keys:
-        if isinstance(current, dict):
-            current = current.get(key, default)
-        else:
-            return default
-    return current if current is not None else default
+# ── App ─────────────────────────────────────────────────────────────────
+app = FastAPI(title="Yakṣarāja API", version="1.0.0", default_response_class=UTF8JSONResponse)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def _fmt(value, fmt=".2f", suffix="", prefix=""):
-    if value is None or value == "N/A":
-        return "N/A"
-    try:
-        return f"{prefix}{float(value):{fmt}}{suffix}"
-    except (ValueError, TypeError):
-        return str(value)
+# In-memory store for analysis results (single-user hackathon demo)
+_store: dict = {}
 
 
-def _pct(value, decimals=1):
-    if value is None or value == "N/A":
-        return "N/A"
-    try:
-        return f"{float(value)*100:.{decimals}f}%"
-    except (ValueError, TypeError):
-        return str(value)
+# ── Helpers ─────────────────────────────────────────────────────────────
 
+def _safe(val, default="N/A"):
+    return val if val is not None else default
 
-
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  DEMO DATA — SUNRISE TEXTILE MILLS                                        ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
 
 def _load_demo_data() -> dict:
-    """Pre-computed results for instant demo — no API calls needed."""
+    """Pre-computed demo data for Sunrise Textile Mills (no API calls)."""
     return {
         "company_name": "Sunrise Textile Mills",
         "fiscal_year": 2024,
         "sector": "Textiles",
-
-        # ── Financial data (from dataset + Person 1) ────────────────────
         "financial_data": {
             "sector": "Textiles",
             "revenue": 850.0, "cogs": 527.0, "gross_profit": 323.0,
@@ -133,10 +118,8 @@ def _load_demo_data() -> dict:
             "ensemble_pd": 0.12,
             "dscr_velocity": 0.05, "dscr_3yr_slope": 0.03,
             "months_to_dscr_danger": 36,
-            "label": 0,  # non-default
+            "label": 0,
         },
-
-        # ── Person 1: ML scores ────────────────────────────────────────
         "ml_scores": {
             "ensemble_pd": 0.12, "xgb_pd": 0.11, "rf_pd": 0.14, "lgb_pd": 0.13,
             "lending_decision": "CONDITIONAL_APPROVE",
@@ -144,8 +127,6 @@ def _load_demo_data() -> dict:
             "model_disagreement": 0.03,
             "model_disagreement_flag": False,
         },
-
-        # ── Person 1: Trajectory ────────────────────────────────────────
         "trajectory": {
             "dscr_trend": "STABLE",
             "months_to_danger": 36,
@@ -153,15 +134,11 @@ def _load_demo_data() -> dict:
             "dscr_history": [1.55, 1.62, 1.70, 1.78, 1.85],
             "fiscal_years": [2020, 2021, 2022, 2023, 2024],
         },
-
-        # ── Person 1: Forensics ────────────────────────────────────────
         "forensics": {
             "beneish_m_score": -2.45, "beneish_flag": "CLEAN",
             "altman_z_score": 2.3, "altman_zone": "GREY",
             "piotroski_f_score": 6, "piotroski_strength": "MODERATE",
         },
-
-        # ── Person 2: Network ──────────────────────────────────────────
         "network": {
             "contagion_risk_score": 0.15,
             "network_nodes": [
@@ -178,8 +155,6 @@ def _load_demo_data() -> dict:
                 {"from": "Sunrise Textile Mills", "to": "TechFab Industries"},
             ],
         },
-
-        # ── Person 2: Stress test ──────────────────────────────────────
         "stress_test": {
             "dscr_p10": 1.05, "dscr_p50": 1.65, "dscr_p90": 2.15,
             "covenant_breach_probability": 0.08,
@@ -198,21 +173,15 @@ def _load_demo_data() -> dict:
                 {"name": "Raw Material +30%", "dscr_impact": 1.10, "pd_impact": 0.32},
             ],
         },
-
-        # ── Person 2: Satellite ─────────────────────────────────────────
         "satellite": {
             "activity_score": 82.5,
             "activity_category": "ACTIVE",
             "vs_revenue_flag": 0,
         },
-
-        # ── Person 2: DNA match ─────────────────────────────────────────
         "dna_match": {
             "closest_default_archetype": "None (Healthy)",
             "max_archetype_similarity": 0.18,
         },
-
-        # ── Person 3: Research ──────────────────────────────────────────
         "research": {
             "company_news_summary": (
                 "Sunrise Textile Mills reported 12% revenue growth in FY2024, driven by "
@@ -228,13 +197,9 @@ def _load_demo_data() -> dict:
             ],
             "promoter_red_flags": [],
             "research_sentiment_score": 0.72,
-            "research_sources": [
-                "Economic Times", "Business Standard", "CRISIL Textiles Report",
-            ],
+            "research_sources": ["Economic Times", "Business Standard", "CRISIL Textiles Report"],
             "used_fallback": False,
         },
-
-        # ── Person 3: CEO Interview ────────────────────────────────────
         "ceo_interview": {
             "key_scores": {
                 "ceo_sentiment_overall": 0.45,
@@ -248,8 +213,6 @@ def _load_demo_data() -> dict:
             "management_quality_score": 72.5,
             "used_fallback": False,
         },
-
-        # ── Person 3: Bull / Bear / Recommendation ──────────────────────
         "bull_case": (
             "## 1. EXECUTIVE SUMMARY\n"
             "Sunrise Textile Mills presents a compelling credit opportunity. With a DSCR of "
@@ -273,7 +236,6 @@ def _load_demo_data() -> dict:
             "- Satellite activity confirms operational reality (82.5/100)\n"
             "- GST cross-verification shows minimal divergence (3%)\n"
         ),
-
         "bear_case": (
             "## 1. CRITICAL CONCERNS\n"
             "- Debt-to-equity of 1.6x leaves limited buffer for adverse scenarios\n"
@@ -296,7 +258,6 @@ def _load_demo_data() -> dict:
             "- Personal guarantee from promoter covering 50% of exposure\n"
             "- Quarterly GST cross-verification with bank statements\n"
         ),
-
         "recommendation": {
             "lending_decision": "CONDITIONAL_APPROVE",
             "recommended_limit_cr": 187.0,
@@ -326,15 +287,9 @@ def _load_demo_data() -> dict:
     }
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  PIPELINE OUTPUT → DASHBOARD ADAPTER                                       ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
-
 def _adapt_pipeline_results(results: dict) -> dict:
-    """
-    Reshape run_pipeline() output to match what dashboard pages expect.
-    The pipeline returns flat keys; the dashboard expects nested dicts.
-    """
+    """Reshape run_pipeline() output to the dashboard-expected format."""
+
     company_data = results.get("company_data", {})
     ml_scores = results.get("ml_scores", {})
     stress_raw = results.get("stress_test", {})
@@ -343,22 +298,20 @@ def _adapt_pipeline_results(results: dict) -> dict:
     dna_raw = results.get("dna_match", {})
     ceo_raw = results.get("ceo_interview", {})
 
-    # ── Adapt ML scores (rename pd_xgb → xgb_pd for dashboard gauge charts)
+    xgb = ml_scores.get("pd_xgb", ml_scores.get("xgb_pd"))
+    rf  = ml_scores.get("pd_rf",  ml_scores.get("rf_pd"))
     ml_adapted = {
-        "ensemble_pd": ml_scores.get("ensemble_pd", 0.15),
-        "xgb_pd": ml_scores.get("pd_xgb", ml_scores.get("xgb_pd", 0.15)),
-        "rf_pd": ml_scores.get("pd_rf", ml_scores.get("rf_pd", 0.15)),
-        "lgb_pd": ml_scores.get("pd_lgb", ml_scores.get("lgb_pd", 0.15)),
+        "ensemble_pd": ml_scores.get("ensemble_pd"),
+        "xgb_pd": xgb,
+        "rf_pd": rf,
+        "lgb_pd": ml_scores.get("pd_lgb", ml_scores.get("lgb_pd")),
         "lending_decision": ml_scores.get("lending_decision", "REVIEW"),
-        "risk_premium": ml_scores.get("risk_premium", 4.0),
-        "credit_limit_cr": ml_scores.get("credit_limit_cr", 0),
-        "model_disagreement": abs(
-            ml_scores.get("pd_xgb", 0.15) - ml_scores.get("pd_rf", 0.15)
-        ),
+        "risk_premium": ml_scores.get("risk_premium"),
+        "credit_limit_cr": ml_scores.get("credit_limit_cr"),
+        "model_disagreement": abs(xgb - rf) if xgb is not None and rf is not None else None,
         "model_disagreement_flag": ml_scores.get("model_disagreement_flag", False),
     }
 
-    # ── Adapt stress test (p10_dscr → dscr_p10, add dscr_simulated)
     dscr_simulated = stress_raw.get("dscr_simulated", stress_raw.get("all_dscr", []))
     named_scenarios_raw = stress_raw.get("named_scenarios", {})
     if isinstance(named_scenarios_raw, dict):
@@ -367,17 +320,14 @@ def _adapt_pipeline_results(results: dict) -> dict:
         scenarios = named_scenarios_raw if isinstance(named_scenarios_raw, list) else []
 
     stress_adapted = {
-        "dscr_p10": stress_raw.get("p10_dscr", stress_raw.get("dscr_p10", 1.0)),
-        "dscr_p50": stress_raw.get("p50_dscr", stress_raw.get("dscr_p50", 1.5)),
-        "dscr_p90": stress_raw.get("p90_dscr", stress_raw.get("dscr_p90", 2.0)),
+        "dscr_p10": stress_raw.get("p10_dscr", stress_raw.get("dscr_p10")),
+        "dscr_p50": stress_raw.get("p50_dscr", stress_raw.get("dscr_p50")),
+        "dscr_p90": stress_raw.get("p90_dscr", stress_raw.get("dscr_p90")),
         "covenant_breach_probability": stress_raw.get(
             "default_probability_3yr",
-            stress_raw.get("covenant_breach_probability", 0.05)
+            stress_raw.get("covenant_breach_probability")
         ),
-        "dscr_simulated": dscr_simulated if dscr_simulated else
-            list(np.random.normal(
-                stress_raw.get("p50_dscr", 1.5), 0.25, 50
-            ).clip(0.5, 3.0)),
+        "dscr_simulated": dscr_simulated if dscr_simulated else [],
         "named_scenarios": [
             {
                 "name": sc.get("name", ""),
@@ -388,41 +338,54 @@ def _adapt_pipeline_results(results: dict) -> dict:
         ],
     }
 
-    # ── Adapt trajectory (ensure dscr_history and fiscal_years exist)
+    # dscr_trend can be either a list (old fallback) or a string like "GREEN"
+    _raw_dscr_trend = trajectory.get("dscr_trend")
+    _dscr_hist = (
+        (_raw_dscr_trend if isinstance(_raw_dscr_trend, list) else [])
+        or trajectory.get("dscr_history", [])
+        or company_data.get("dscr_history", [])
+    )
+    _fy_list = (
+        trajectory.get("fiscal_years")
+        or company_data.get("fiscal_years", [])
+    )
     traj_adapted = {
-        "dscr_trend": trajectory.get("warning_level", "STABLE"),
-        "months_to_danger": trajectory.get("estimated_months_to_distress", 999),
-        "dscr_3yr_slope": trajectory.get("dscr_velocity", 0.03),
-        "dscr_history": trajectory.get("dscr_trend",
-                          trajectory.get("dscr_history", [1.5, 1.5, 1.5, 1.5, 1.5])),
-        "fiscal_years": trajectory.get("fiscal_years",
-                          list(range(
-                              company_data.get("fiscal_year", 2024) - 4,
-                              company_data.get("fiscal_year", 2024) + 1
-                          ))),
+        "dscr_trend": trajectory.get("warning_level", "STABLE") if not isinstance(_raw_dscr_trend, list) else "STABLE",
+        "months_to_danger": trajectory.get("estimated_months_to_distress"),
+        "dscr_3yr_slope": trajectory.get("dscr_velocity"),
+        "dscr_history": _dscr_hist,
+        "fiscal_years": _fy_list,
     }
 
-    # ── Adapt network (ensure network_nodes and network_edges exist)
     nodes = network_raw.get("network_nodes", [])
     edges = network_raw.get("network_edges", [])
+
+    # De-duplicate and filter out "Unknown" placeholder nodes
+    seen_ids = set()
+    clean_nodes = []
+    for n in nodes:
+        nid = n.get("id", "")
+        if nid and nid != "Unknown" and nid not in seen_ids:
+            seen_ids.add(nid)
+            clean_nodes.append(n)
+    valid_ids = seen_ids
+    clean_edges = [e for e in edges
+                   if e.get("from") in valid_ids and e.get("to") in valid_ids]
+    nodes, edges = clean_nodes, clean_edges
+
     if not nodes:
-        # Auto-generate from pipeline data
         company_name = results.get("company_name", "Company")
-        nodes = [
-            {"id": company_name, "type": "target", "npa": False},
-        ]
-        # Add directors/promoters if available
+        nodes = [{"id": company_name, "type": "target", "npa": False}]
         for d in network_raw.get("directors", []):
             name = d if isinstance(d, str) else d.get("name", "Unknown")
-            nodes.append({"id": name, "type": "promoter", "npa": False})
+            if name != "Unknown":
+                nodes.append({"id": name, "type": "promoter", "npa": False})
         for c in network_raw.get("related_companies", []):
-            cname = c if isinstance(c, str) else c.get("company_name", "Unknown")
-            is_npa = c.get("is_npa", False) if isinstance(c, dict) else False
-            nodes.append({"id": cname, "type": "related", "npa": is_npa})
-        # Build edges
-        edges = []
-        for n in nodes[1:]:
-            edges.append({"from": n["id"], "to": company_name})
+            cname = c if isinstance(c, str) else c.get("name", c.get("company_name", "Unknown"))
+            if cname != "Unknown":
+                is_npa = c.get("is_npa", False) if isinstance(c, dict) else False
+                nodes.append({"id": cname, "type": "related", "npa": is_npa})
+        edges = [{"from": n["id"], "to": company_name} for n in nodes[1:]]
 
     network_adapted = {
         "contagion_risk_score": network_raw.get("contagion_risk_score", 0),
@@ -430,7 +393,6 @@ def _adapt_pipeline_results(results: dict) -> dict:
         "network_edges": edges,
     }
 
-    # ── Adapt DNA match
     dna_adapted = {
         "closest_default_archetype": dna_raw.get(
             "closest_archetype", dna_raw.get("closest_default_archetype", "N/A")),
@@ -438,7 +400,6 @@ def _adapt_pipeline_results(results: dict) -> dict:
             "max_similarity", dna_raw.get("max_archetype_similarity", 0)),
     }
 
-    # ── Build final output dict matching _load_demo_data() structure
     return {
         "company_name": results.get("company_name", "Unknown"),
         "fiscal_year": company_data.get("fiscal_year", 2024),
@@ -460,84 +421,105 @@ def _adapt_pipeline_results(results: dict) -> dict:
     }
 
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  PAGE CONFIG & STATE                                                       ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# ═══════════════════════════════════════════════════════════════════════════
+#  ROUTES
+# ═══════════════════════════════════════════════════════════════════════════
 
-from PIL import Image as _PILImage
-_logo_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "logo.jpeg")
-_page_icon = _PILImage.open(_logo_path) if os.path.exists(_logo_path) else "📊"
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
 
-st.set_page_config(
-    page_title="Intelli-Credit | AI Credit Decisioning",
-    page_icon=_page_icon,
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
 
-# Session state init
-if "results" not in st.session_state:
-    st.session_state.results = None
-if "pipeline_done" not in st.session_state:
-    st.session_state.pipeline_done = False
-if "cam_path" not in st.session_state:
-    st.session_state.cam_path = None
-if "prefetched_data" not in st.session_state:
-    st.session_state.prefetched_data = {}
+@app.post("/api/demo")
+async def load_demo():
+    """Load pre-computed Sunrise Textile Mills demo data."""
+    data = _load_demo_data()
+    analysis_id = str(uuid.uuid4())[:8]
+    _store[analysis_id] = data
+    return {"analysis_id": analysis_id, "data": data}
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
-# ║  LANDING PAGE (shown before any analysis)                                   ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
 
-if not st.session_state.pipeline_done:
-    from landing_v2 import render_landing
-    render_landing(
-        load_demo=_load_demo_data,
-        adapt_results=_adapt_pipeline_results,
-        run_pipeline_fn=run_pipeline,
-        parse_excel_fn=parse_screener_excel,
-        project_root=PROJECT_ROOT,
+@app.post("/api/analyse")
+async def analyse(
+    company_name: str = Form(...),
+    file: UploadFile = File(...),
+    ceo_audio: Optional[UploadFile] = File(None),
+    ceo_transcript: Optional[str] = Form(None),
+):
+    """Upload financials (and optionally CEO interview audio/transcript) then run the pipeline."""
+    allowed_ext = {".xlsx", ".xls", ".csv"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_ext:
+        raise HTTPException(400, f"Unsupported file type: {ext}")
+
+    allowed_audio_ext = {".mp3", ".wav", ".mp4", ".m4a", ".ogg", ".flac"}
+    if ceo_audio and ceo_audio.filename:
+        audio_ext = os.path.splitext(ceo_audio.filename)[1].lower()
+        if audio_ext not in allowed_audio_ext:
+            raise HTTPException(400, f"Unsupported audio type: {audio_ext}. Use mp3/wav/mp4")
+
+    # Save uploads to temp dir
+    tmp_dir = tempfile.mkdtemp()
+    tmp_path = os.path.join(tmp_dir, file.filename)
+    ceo_audio_path = None
+    try:
+        with open(tmp_path, "wb") as f:
+            content = await file.read()
+            if len(content) > 200 * 1024 * 1024:  # 200MB limit
+                raise HTTPException(413, "File too large (max 200MB)")
+            f.write(content)
+
+        # Save CEO audio if provided
+        if ceo_audio and ceo_audio.filename:
+            ceo_tmp_path = os.path.join(tmp_dir, ceo_audio.filename)
+            audio_content = await ceo_audio.read()
+            if len(audio_content) > 500 * 1024 * 1024:  # 500MB limit for audio
+                raise HTTPException(413, "Audio file too large (max 500MB)")
+            with open(ceo_tmp_path, "wb") as f:
+                f.write(audio_content)
+            ceo_audio_path = ceo_tmp_path
+
+        # Parse the uploaded financials
+        company_data = parse_screener_excel(tmp_path, company_name=company_name)
+
+        # Run the full pipeline
+        raw_results = run_pipeline(
+            company_name=company_name,
+            company_data=company_data,
+            output_dir=os.path.join(PROJECT_ROOT, "data", "processed"),
+            ceo_audio_path=ceo_audio_path,
+            ceo_transcript=ceo_transcript or None,
+        )
+
+        # Adapt to dashboard format
+        data = _adapt_pipeline_results(raw_results)
+        analysis_id = str(uuid.uuid4())[:8]
+        _store[analysis_id] = data
+
+        return {"analysis_id": analysis_id, "data": data}
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@app.get("/api/analysis/{analysis_id}")
+async def get_analysis(analysis_id: str):
+    """Retrieve a previously computed analysis."""
+    if analysis_id not in _store:
+        raise HTTPException(404, "Analysis not found")
+    return {"data": _store[analysis_id]}
+
+
+@app.get("/api/cam/{analysis_id}")
+async def download_cam(analysis_id: str):
+    """Download the generated CAM DOCX for an analysis."""
+    if analysis_id not in _store:
+        raise HTTPException(404, "Analysis not found")
+    cam_path = _store[analysis_id].get("cam_path")
+    if not cam_path or not os.path.exists(cam_path):
+        raise HTTPException(404, "CAM document not generated")
+    return FileResponse(
+        cam_path,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=os.path.basename(cam_path),
     )
-    st.stop()
-
-# ═══════════════════════════════════════════════════════════════════════════
-# DASHBOARD — Finexy Theme (runs only when analysis is loaded)
-# ═══════════════════════════════════════════════════════════════════════════
-from dashboard_pages import (
-    DASHBOARD_CSS, render_overview, render_deep_dive, render_reports,
-    _navbar_html,
-)
-
-st.html(DASHBOARD_CSS)
-
-data = st.session_state.results
-company = _g(data, "company_name")
-decision = _g(data, "recommendation", "lending_decision", default="")
-
-# Top navigation bar
-st.html(_navbar_html(company, decision))
-
-# New analysis button (right-aligned)
-_na_cols = st.columns([6, 1])
-with _na_cols[1]:
-    if st.button("New Analysis"):
-        st.session_state.results = None
-        st.session_state.pipeline_done = False
-        st.session_state.cam_path = None
-        st.rerun()
-
-# Page tabs
-tab_overview, tab_deep, tab_reports = st.tabs([
-    "   Overview   ",
-    "   Deep Dive   ",
-    "   Reports   ",
-])
-
-with tab_overview:
-    render_overview(data)
-
-with tab_deep:
-    render_deep_dive(data)
-
-with tab_reports:
-    render_reports(data, st.session_state.cam_path)

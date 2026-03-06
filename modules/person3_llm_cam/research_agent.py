@@ -187,7 +187,7 @@ The sentiment_score should be 0.0 (extremely negative) to 1.0 (extremely positiv
 Focus on financial health, management quality, regulatory risks, and business outlook.
 Return ONLY valid JSON, no other text."""
 
-    _max_retries = 3
+    _max_retries = 2
     for _attempt in range(1, _max_retries + 1):
         try:
             client = genai.Client(api_key=api_key)
@@ -217,12 +217,15 @@ Return ONLY valid JSON, no other text."""
             return _empty_intelligence()
         except Exception as e:
             err = str(e).lower()
+            if "503" in err or "unavailable" in err or "service unavailable" in err:
+                logger.warning(f"Gemini service unavailable for {category} — using fallback immediately")
+                return _empty_intelligence()
             if "429" in err or "quota" in err or "resource exhausted" in err:
-                logger.warning(f"Rate limit hit for {category} (attempt {_attempt}/{_max_retries}) — waiting 60s...")
-                time.sleep(60)
+                logger.warning(f"Rate limit hit for {category} (attempt {_attempt}/{_max_retries}) — waiting 15s...")
+                time.sleep(15)
             elif _attempt < _max_retries:
                 logger.warning(f"Gemini extraction error for {category} (attempt {_attempt}/{_max_retries}): {e}")
-                time.sleep(2 ** _attempt)
+                time.sleep(2)
             else:
                 logger.error(f"Gemini extraction failed for {category}: {e}")
                 return _empty_intelligence()
@@ -329,11 +332,19 @@ def node_extract_intelligence(state: ResearchState) -> ResearchState:
     sentiment_scores = []
     summaries = []
 
+    _gemini_down = False  # circuit-breaker: skip remaining calls once 503 detected
+
     for category, results in categories.items():
-        if not results:
+        if not results or _gemini_down:
             continue
         logger.info(f"Extracting intelligence: {category}")
+        import time as _time
+        _t0 = _time.monotonic()
         intel = _extract_intelligence(gemini_key, results, category, company)
+        # If the call returned nearly instantly with empty summary, Gemini is down
+        if _time.monotonic() - _t0 < 1.0 and not intel.get("summary"):
+            logger.warning("Gemini appears down \u2014 skipping remaining extractions")
+            _gemini_down = True
 
         summaries.append(f"**{category}**: {intel.get('summary', 'N/A')}")
         all_risks.extend(intel.get("red_flags", []))
@@ -343,10 +354,12 @@ def node_extract_intelligence(state: ResearchState) -> ResearchState:
         if category == "Promoter Background":
             all_red_flags.extend(intel.get("red_flags", []))
 
-    # Determine overall industry outlook from industry extraction
-    industry_intel = _extract_intelligence(
-        gemini_key, state.get("raw_industry_outlook", []), "Industry Outlook", company
-    ) if state.get("raw_industry_outlook") else _empty_intelligence()
+    # Determine overall industry outlook — reuse already-extracted data, don't call Gemini again
+    industry_intel = _empty_intelligence()
+    if not _gemini_down and state.get("raw_industry_outlook"):
+        industry_intel = _extract_intelligence(
+            gemini_key, state.get("raw_industry_outlook", []), "Industry Outlook (final)", company
+        )
 
     avg_sentiment = (
         sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.5
