@@ -1,0 +1,13 @@
+requirements.txt
+api/
+modules/
+pipeline/
+dashboard/
+models/
+notebooks/
+tests/
+data/
+scripts/
+*.py
+*.ipynb
+.venv/

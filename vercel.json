@@ -2,6 +2,8 @@
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "framework": null,
+  "installCommand": "cd frontend && npm install",
+  "ignoreCommand": "exit 1",
   "rewrites": [
     {
       "source": "/api/(.*)",
