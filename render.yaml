@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: yaksaraja-api
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: SENTINEL_CLIENT_ID
+        sync: false
+      - key: SENTINEL_CLIENT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DEMO_COMPANY
+        value: sunrise_textile_mills

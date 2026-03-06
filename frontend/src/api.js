@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const api = axios.create({ baseURL: '/api' })
+// In production (Render+Vercel) VITE_API_BASE_URL is not needed because
+// vercel.json rewrites /api/* → Render backend. Setting it overrides that.
+const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || '/api' })
 
 export async function loadDemo() {
   const { data } = await api.post('/demo')
