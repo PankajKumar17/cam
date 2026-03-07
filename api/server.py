@@ -544,7 +544,7 @@ async def load_demo():
     analysis_id = str(uuid.uuid4())[:8]
     _store[analysis_id] = data
     _persist_analysis(analysis_id, data)
-    return {"analysis_id": analysis_id, "data": data}
+    return UTF8JSONResponse({"analysis_id": analysis_id, "data": data})
 
 
 def _run_pipeline_sync(
@@ -639,7 +639,7 @@ async def analyse(
         analysis_id = str(uuid.uuid4())[:8]
         _store[analysis_id] = data
         _persist_analysis(analysis_id, data)
-        return {"analysis_id": analysis_id, "data": data}
+        return UTF8JSONResponse({"analysis_id": analysis_id, "data": data})
 
     except HTTPException:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -654,7 +654,7 @@ async def get_analysis(analysis_id: str):
     """Retrieve a previously computed analysis."""
     if analysis_id not in _store:
         raise HTTPException(404, "Analysis not found")
-    return {"data": _store[analysis_id]}
+    return UTF8JSONResponse({"data": _store[analysis_id]})
 
 
 @app.get("/api/cam/{analysis_id}")
