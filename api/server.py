@@ -134,6 +134,27 @@ def _safe(val, default="N/A"):
     return val if val is not None else default
 
 
+def _sanitize_numpy(obj):
+    """Recursively convert numpy scalars/arrays to native Python types."""
+    try:
+        import numpy as np
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return [_sanitize_numpy(v) for v in obj.tolist()]
+    except ImportError:
+        pass
+    if isinstance(obj, dict):
+        return {k: _sanitize_numpy(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_numpy(v) for v in obj]
+    return obj
+
+
 def _load_demo_data() -> dict:
     """Pre-computed demo data for Sunrise Textile Mills (no API calls)."""
     return {
@@ -480,7 +501,7 @@ def _adapt_pipeline_results(results: dict) -> dict:
             "max_similarity", dna_raw.get("max_archetype_similarity", 0)),
     }
 
-    return {
+    adapted = {
         "company_name": results.get("company_name", "Unknown"),
         "fiscal_year": company_data.get("fiscal_year", 2024),
         "sector": company_data.get("sector", "Industrial"),
@@ -504,6 +525,7 @@ def _adapt_pipeline_results(results: dict) -> dict:
         "recommendation": results.get("recommendation", {}),
         "cam_path": results.get("cam_path"),
     }
+    return _sanitize_numpy(adapted)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
