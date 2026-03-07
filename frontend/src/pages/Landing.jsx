@@ -294,6 +294,14 @@ export default function Landing() {
                       <span className="text-xs text-text-muted">or</span>
                       <span className="text-orange text-sm font-semibold underline">Browse files</span>
                       <span className="text-xs text-text-muted mt-1">Accepts XLSX, XLS, CSV · Max 200MB</span>
+                      <span className="text-xs text-text-muted mt-2 text-center leading-relaxed">
+                        Download financial statements from{' '}
+                        <a href="https://www.screener.in" target="_blank" rel="noopener noreferrer"
+                           className="text-orange font-semibold underline hover:text-orange/80 transition-colors">
+                          screener.in
+                        </a>
+                        {' '}and drop them here
+                      </span>
                       <input
                         id="file-input"
                         type="file"
