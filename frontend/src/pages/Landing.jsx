@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UploadCloud, CheckCircle, Lock, FileText, X, Brain, FileCheck, ArrowRight, Mic, ChevronDown, ChevronUp, Menu } from 'lucide-react'
 import { useAnalysis } from '../App'
-import { loadDemo, analyse, warmupServer } from '../api'
+import { loadDemo, analyse } from '../api'
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } }
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } } }
@@ -64,7 +64,6 @@ export default function Landing() {
   // Credit officer qualitative notes
   const [notesExpanded, setNotesExpanded] = useState(false)
   const [qualitativeNotes, setQualitativeNotes] = useState('')
-  const [warmingUp, setWarmingUp] = useState(false)
   const { setAnalysis } = useAnalysis()
   const navigate = useNavigate()
 
@@ -94,22 +93,6 @@ export default function Landing() {
     if (!canSubmit) return
     setLoading(true)
     setError('')
-    setWarmingUp(false)
-    // Wake up Render if it has spun down, before starting the progress animation
-    try {
-      await warmupServer(() => {
-        setWarmingUp(true)
-        setProgress(2)
-        setStageLabel('Server is waking up after idle… this takes ~30s, hang tight!')
-      })
-    } catch (e) {
-      setLoading(false)
-      setProgress(0)
-      setWarmingUp(false)
-      setError(e.message)
-      return
-    }
-    setWarmingUp(false)
     startFakeProgress()
     try {
       const result = await analyse(
@@ -138,17 +121,6 @@ export default function Landing() {
 
   async function handleDemo() {
     setLoadingDemo(true)
-    setError('')
-    // Wake up Render if it has spun down
-    try {
-      await warmupServer(() =>
-        setError('⏳ Server is waking up after idle (~30s)… retrying automatically, please wait.')
-      )
-    } catch (e) {
-      setError(e.message)
-      setLoadingDemo(false)
-      return
-    }
     setError('')
     try {
       const result = await loadDemo()

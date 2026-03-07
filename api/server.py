@@ -4,13 +4,13 @@ Yakṣarāja — FastAPI Backend
 Wraps the existing pipeline modules and serves JSON to the React frontend.
 """
 
+import asyncio
 import os
 import sys
 import json
 import uuid
 import shutil
 import tempfile
-import threading
 from pathlib import Path
 from typing import Optional
 
@@ -547,8 +547,7 @@ async def load_demo():
     return {"analysis_id": analysis_id, "data": data}
 
 
-def _pipeline_worker(
-    job_id: str,
+def _run_pipeline_sync(
     tmp_dir: str,
     tmp_path: str,
     company_name: str,
@@ -556,8 +555,8 @@ def _pipeline_worker(
     ceo_transcript,
     saved_pdf_paths,
     qualitative_notes,
-):
-    """Background thread: runs the full pipeline then updates _jobs."""
+) -> dict:
+    """Blocking pipeline execution — called via asyncio.to_thread."""
     try:
         company_data = parse_screener_excel(tmp_path, company_name=company_name)
         raw_results = run_pipeline(
@@ -569,15 +568,7 @@ def _pipeline_worker(
             pdf_paths=saved_pdf_paths or None,
             qualitative_notes=qualitative_notes or None,
         )
-        data = _adapt_pipeline_results(raw_results)
-        analysis_id = str(uuid.uuid4())[:8]
-        _store[analysis_id] = data
-        _persist_analysis(analysis_id, data)
-        _jobs[job_id] = {"status": "done", "analysis_id": analysis_id, "data": data}
-        _persist_job(job_id, {"status": "done", "analysis_id": analysis_id})
-    except Exception as exc:
-        _jobs[job_id] = {"status": "error", "error": str(exc)}
-        _persist_job(job_id, {"status": "error", "error": str(exc)})
+        return _adapt_pipeline_results(raw_results)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -591,7 +582,7 @@ async def analyse(
     pdf_files: Optional[List[UploadFile]] = File(None),
     qualitative_notes: Optional[str] = Form(None),
 ):
-    """Accept uploads, start the pipeline in a background thread, return job_id immediately."""
+    """Accept uploads, run the pipeline, and return the result directly."""
     allowed_ext = {".xlsx", ".xls", ".csv"}
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in allowed_ext:
@@ -609,7 +600,6 @@ async def analyse(
                 if not pf.filename.lower().endswith(".pdf"):
                     raise HTTPException(400, f"PDF upload '{pf.filename}' is not a .pdf file")
 
-    # Save all uploads to a temp dir that the worker thread will clean up
     tmp_dir = tempfile.mkdtemp()
     try:
         tmp_path = os.path.join(tmp_dir, file.filename)
@@ -641,18 +631,15 @@ async def analyse(
                         f.write(pdf_content)
                     saved_pdf_paths.append(pdf_tmp_path)
 
-        job_id = str(uuid.uuid4())[:8]
-        _jobs[job_id] = {"status": "running"}
-
-        t = threading.Thread(
-            target=_pipeline_worker,
-            args=(job_id, tmp_dir, tmp_path, company_name,
-                  ceo_audio_path, ceo_transcript, saved_pdf_paths, qualitative_notes),
-            daemon=True,
+        data = await asyncio.to_thread(
+            _run_pipeline_sync,
+            tmp_dir, tmp_path, company_name,
+            ceo_audio_path, ceo_transcript, saved_pdf_paths, qualitative_notes,
         )
-        t.start()
-
-        return {"job_id": job_id}
+        analysis_id = str(uuid.uuid4())[:8]
+        _store[analysis_id] = data
+        _persist_analysis(analysis_id, data)
+        return {"analysis_id": analysis_id, "data": data}
 
     except HTTPException:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -660,15 +647,6 @@ async def analyse(
     except Exception as exc:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise HTTPException(500, str(exc))
-
-
-@app.get("/api/job/{job_id}")
-async def job_status(job_id: str):
-    """Poll the status of a running pipeline job."""
-    job = _jobs.get(job_id)
-    if job is None:
-        raise HTTPException(404, "Job not found")
-    return job
 
 
 @app.get("/api/analysis/{analysis_id}")
