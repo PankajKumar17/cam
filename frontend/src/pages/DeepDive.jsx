@@ -7,9 +7,9 @@ import {
 import { useAnalysis } from '../App'
 import { Card, SectionHeader, DataTable, EmptyState, Badge } from '../components/ui'
 import { g, fmt, pct, RISK_COLORS } from '../lib/utils'
-import { BarChart2, TrendingUp, Zap, MessageSquare, Satellite } from 'lucide-react'
+import { BarChart2, TrendingUp, Zap, MessageSquare, Satellite, Shield } from 'lucide-react'
 
-const TABS = ['Financial', 'Forensics', 'Stress Test', 'Bull vs Bear', 'Satellite']
+const TABS = ['Financial', 'Forensics', 'Stress Test', 'Bull vs Bear', 'Satellite', 'Compliance']
 
 const tooltipStyle = {
   background: '#1A1A1A', border: 'none', borderRadius: 8,
@@ -25,6 +25,8 @@ export default function DeepDive() {
   const traj = g(d, 'trajectory') || {}
   const stress = g(d, 'stress_test') || {}
   const sat = g(d, 'satellite') || {}
+  const mca = g(d, 'mca_legal') || {}
+  const bank = g(d, 'bank_analysis') || {}
   const company = d.company_name || 'Company'
 
   return (
@@ -52,6 +54,7 @@ export default function DeepDive() {
       {activeTab === 2 && <StressTab stress={stress} />}
       {activeTab === 3 && <DebateTab d={d} />}
       {activeTab === 4 && <SatelliteTab sat={sat} />}
+      {activeTab === 5 && <ComplianceTab mca={mca} bank={bank} />}
     </motion.div>
   )
 }
@@ -119,64 +122,110 @@ function FinancialTab({ fin, traj }) {
 /* ── Forensics Tab ─────────────────────────── */
 function ForensicsTab({ fin, d }) {
   const forensics = g(d, 'forensics') || {}
+
+  // Prefer live values from forensics module; fall back to financial_data fields
   const components = [
-    { name: 'DSRI', value: fin.beneish_dsri ?? 0.95, threshold: 1.465 },
-    { name: 'GMI', value: 1.0, threshold: 1.014 },
-    { name: 'AQI', value: 1.0, threshold: 1.254 },
-    { name: 'SGI', value: 1.08, threshold: 1.607 },
-    { name: 'DEPI', value: 1.0, threshold: 1.077 },
-    { name: 'SGAI', value: 1.0, threshold: 1.041 },
-    { name: 'TATA', value: fin.beneish_tata ?? 0.03, threshold: 0.031 },
-    { name: 'LVGI', value: 1.0, threshold: 1.111 },
+    { name: 'DSRI',  value: forensics.beneish_dsri  ?? fin.beneish_dsri  ?? 0.95, threshold: 1.465, desc: 'Days Sales Receivables Index' },
+    { name: 'GMI',   value: forensics.beneish_gmi   ?? 1.0, threshold: 1.014, desc: 'Gross Margin Index' },
+    { name: 'AQI',   value: forensics.beneish_aqi   ?? 1.0, threshold: 1.254, desc: 'Asset Quality Index' },
+    { name: 'SGI',   value: forensics.beneish_sgi   ?? 1.08, threshold: 1.607, desc: 'Sales Growth Index' },
+    { name: 'DEPI',  value: forensics.beneish_depi  ?? 1.0, threshold: 1.077, desc: 'Depreciation Index' },
+    { name: 'SGAI',  value: forensics.beneish_sgai  ?? 1.0, threshold: 1.041, desc: 'SG&A Index' },
+    { name: 'TATA',  value: forensics.beneish_tata  ?? fin.beneish_tata  ?? 0.03, threshold: 0.031, desc: 'Total Accruals to Total Assets' },
+    { name: 'LVGI',  value: forensics.beneish_lvgi  ?? 1.0, threshold: 1.111, desc: 'Leverage Index' },
   ]
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4">
-      <Card>
-        <h3 className="text-sm font-semibold text-dark mb-4">Beneish 8-Component Breakdown</h3>
-        <div className="space-y-3">
-          {components.map(c => {
-            const pctVal = Math.min((c.value / (c.threshold * 2)) * 100, 100)
-            const isFlag = c.value > c.threshold
-            return (
-              <div key={c.name} className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-text-secondary w-12">{c.name}</span>
-                <div className="flex-1 h-2 bg-border rounded-full overflow-hidden relative">
-                  <div className="h-full rounded-full" style={{ width: `${pctVal}%`, background: isFlag ? '#EF4444' : '#E8470A' }} />
-                  <div className="absolute top-0 h-full w-px bg-text-muted" style={{ left: `${(c.threshold / (c.threshold * 2)) * 100}%` }} />
-                </div>
-                <span className={`text-xs font-[DM_Mono] w-12 text-right ${isFlag ? 'text-danger font-bold' : ''}`}>
-                  {c.value.toFixed(3)}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </Card>
+  // Piotroski 9-signal breakdown
+  const psignals = forensics.piotroski_signals || []
 
-      <div className="space-y-4">
-        <Card className="text-center p-8">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">Beneish M-Score</p>
-          <p className={`text-4xl font-bold ${(fin.beneish_m_score ?? -3) > -2.22 ? 'text-danger' : 'text-success'}`}>
-            {fmt(fin.beneish_m_score)}
-          </p>
-          <Badge
-            text={(fin.beneish_m_score ?? -3) > -2.22 ? 'SUSPICIOUS' : 'CLEAN'}
-            color={(fin.beneish_m_score ?? -3) > -2.22 ? '#EF4444' : '#10B981'}
-            bg={(fin.beneish_m_score ?? -3) > -2.22 ? '#FEF2F2' : '#ECFDF5'}
-          />
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4">
+        <Card>
+          <h3 className="text-sm font-semibold text-dark mb-4">Beneish 8-Component Breakdown</h3>
+          <div className="space-y-3">
+            {components.map(c => {
+              const pctVal = Math.min((c.value / (c.threshold * 2)) * 100, 100)
+              const isFlag = c.value > c.threshold
+              return (
+                <div key={c.name} className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-text-secondary w-12">{c.name}</span>
+                  <div className="flex-1 h-2 bg-border rounded-full overflow-hidden relative">
+                    <div className="h-full rounded-full" style={{ width: `${pctVal}%`, background: isFlag ? '#EF4444' : '#E8470A' }} />
+                    <div className="absolute top-0 h-full w-px bg-text-muted" style={{ left: `${(c.threshold / (c.threshold * 2)) * 100}%` }} />
+                  </div>
+                  <span className={`text-xs font-[DM_Mono] w-14 text-right ${isFlag ? 'text-danger font-bold' : ''}`}>
+                    {typeof c.value === 'number' ? c.value.toFixed(3) : c.value}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          {forensics.beneish_red_flags?.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border space-y-1">
+              {forensics.beneish_red_flags.map((f, i) => (
+                <p key={i} className="text-xs text-danger">⚠ {f}</p>
+              ))}
+            </div>
+          )}
         </Card>
-        <Card className="text-center p-8">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">Altman Z-Score</p>
-          <p className="text-4xl font-bold text-warning">{fmt(fin.altman_z_score)}</p>
-          <Badge text={forensics.altman_zone || 'GREY'} color="#F59E0B" bg="#FFFBEB" />
-        </Card>
-        <Card className="text-center p-8">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">Piotroski F-Score</p>
-          <p className="text-4xl font-bold text-dark">{fin.piotroski_f_score ?? '—'}</p>
-          <Badge text={`${fin.piotroski_f_score ?? 0}/9`} color="#6B7280" bg="#F4F5F7" />
-        </Card>
+
+        <div className="space-y-4">
+          <Card className="text-center p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">Beneish M-Score</p>
+            <p className={`text-4xl font-bold ${
+              (forensics.beneish_m_score ?? fin.beneish_m_score ?? -3) > -2.22 ? 'text-danger' : 'text-success'
+            }`}>
+              {fmt(forensics.beneish_m_score ?? fin.beneish_m_score)}
+            </p>
+            <Badge
+              text={forensics.beneish_flag ?? ((forensics.beneish_m_score ?? fin.beneish_m_score ?? -3) > -2.22 ? 'MANIPULATOR' : 'CLEAN')}
+              color={(forensics.beneish_m_score ?? fin.beneish_m_score ?? -3) > -2.22 ? '#EF4444' : '#10B981'}
+              bg={(forensics.beneish_m_score ?? fin.beneish_m_score ?? -3) > -2.22 ? '#FEF2F2' : '#ECFDF5'}
+            />
+          </Card>
+          <Card className="text-center p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">Altman Z-Score</p>
+            <p className="text-4xl font-bold text-warning">{fmt(forensics.altman_z_score ?? fin.altman_z_score)}</p>
+            <Badge
+              text={forensics.altman_zone || 'GREY'}
+              color={forensics.altman_zone === 'SAFE' ? '#10B981' : forensics.altman_zone === 'DISTRESS' ? '#EF4444' : '#F59E0B'}
+              bg={forensics.altman_zone === 'SAFE' ? '#ECFDF5' : forensics.altman_zone === 'DISTRESS' ? '#FEF2F2' : '#FFFBEB'}
+            />
+          </Card>
+          <Card className="text-center p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-2">Piotroski F-Score</p>
+            <p className="text-4xl font-bold text-dark">{forensics.piotroski_f_score ?? fin.piotroski_f_score ?? '—'}</p>
+            <Badge
+              text={`${forensics.piotroski_f_score ?? fin.piotroski_f_score ?? 0}/9 · ${forensics.piotroski_strength || 'N/A'}`}
+              color={forensics.piotroski_strength === 'STRONG' ? '#10B981' : forensics.piotroski_strength === 'WEAK' ? '#EF4444' : '#6B7280'}
+              bg={forensics.piotroski_strength === 'STRONG' ? '#ECFDF5' : forensics.piotroski_strength === 'WEAK' ? '#FEF2F2' : '#F4F5F7'}
+            />
+          </Card>
+        </div>
       </div>
+
+      {/* Piotroski 9-signal breakdown */}
+      {psignals.length > 0 && (
+        <Card>
+          <h3 className="text-sm font-semibold text-dark mb-4">Piotroski F-Score — 9 Signal Breakdown</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {psignals.map((sig, i) => (
+              <div key={i} className={`flex items-center gap-2 rounded-xl px-3 py-2 ${
+                sig.passed ? 'bg-success-bg' : 'bg-surface-row'
+              }`}>
+                <span className={`text-base ${sig.passed ? 'text-success' : 'text-text-muted'}`}>
+                  {sig.passed ? '✓' : '✗'}
+                </span>
+                <div className="min-w-0">
+                  <p className={`text-xs font-medium truncate ${sig.passed ? 'text-success' : 'text-text-muted'}`}>{sig.signal}</p>
+                  <p className="text-[10px] text-text-muted">{sig.group}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   )
 }
@@ -413,6 +462,143 @@ function SatelliteTab({ sat }) {
               </div>
             ))}
           </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+/* ── Compliance Tab (MCA + Bank / Circular Trading) ─────── */
+function ComplianceTab({ mca, bank }) {
+  const legalScore = mca.legal_risk_score ?? 0
+  const legalLevel = mca.legal_risk_level ?? 'LOW'
+  const riskFactors = mca.risk_factors ?? []
+  const legalCases = mca.legal_cases ?? []
+  const charges = mca.charges ?? []
+  const dinDisqualified = mca.din_disqualified_count ?? 0
+
+  const bankScore = bank.overall_bank_risk_score ?? 0
+  const bankLevel = bank.overall_bank_risk_level ?? 'LOW'
+  const circularScore = bank.circular_trading_score ?? 0
+  const circularDetected = bank.circular_detected ?? false
+  const gstRisk = bank.gst_2a_3b_risk_level ?? 'LOW'
+  const itcMatch = bank.itc_match_pct ?? 100
+  const revDiv = bank.revenue_divergence_pct ?? 0
+  const bounceCount = bank.bounce_count_12m ?? 0
+  const bankFlags = bank.all_risk_flags ?? []
+
+  const scoreColor = (level) =>
+    level === 'HIGH' ? '#EF4444' : level === 'MEDIUM' ? '#F59E0B' : '#10B981'
+  const scoreBg = (level) =>
+    level === 'HIGH' ? '#FEF2F2' : level === 'MEDIUM' ? '#FFFBEB' : '#ECFDF5'
+
+  return (
+    <div className="space-y-4">
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="text-center p-6">
+          <Shield size={20} className="mx-auto mb-2 text-text-muted" />
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1">MCA / Legal Risk Score</p>
+          <p className="text-4xl font-bold" style={{ color: scoreColor(legalLevel) }}>{legalScore}</p>
+          <p className="text-xs text-text-muted mt-0.5">/ 100</p>
+          <Badge text={legalLevel} color={scoreColor(legalLevel)} bg={scoreBg(legalLevel)} />
+          {dinDisqualified > 0 && (
+            <div className="mt-3 bg-danger-bg text-danger text-xs px-3 py-1.5 rounded-lg font-semibold">
+              ⚠ {dinDisqualified} Director DIN Disqualified
+            </div>
+          )}
+        </Card>
+
+        <Card className="text-center p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1">Bank / Circular Trading Risk</p>
+          <p className="text-4xl font-bold" style={{ color: scoreColor(bankLevel) }}>{bankScore}</p>
+          <p className="text-xs text-text-muted mt-0.5">/ 100</p>
+          <Badge text={bankLevel} color={scoreColor(bankLevel)} bg={scoreBg(bankLevel)} />
+          {circularDetected && (
+            <div className="mt-3 bg-danger-bg text-danger text-xs px-3 py-1.5 rounded-lg font-semibold">
+              ⚠ Circular Trading Pattern Detected
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* MCA details grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <h3 className="text-sm font-semibold text-dark mb-4">MCA / Legal Intelligence</h3>
+          <div className="space-y-2 text-sm">
+            {[
+              { label: 'Legal Risk Score', value: `${legalScore} / 100` },
+              { label: 'DIN Disqualified Count', value: dinDisqualified },
+              { label: 'NCLT Case', value: mca.nclt_case ? '⚠ YES' : '✓ None found' },
+              { label: 'Summary', value: mca.summary || '—' },
+            ].map(row => (
+              <div key={row.label} className="flex justify-between py-1.5 border-b border-border last:border-0">
+                <span className="text-text-muted text-xs">{row.label}</span>
+                <span className="font-medium text-dark text-xs text-right max-w-[60%]">{String(row.value)}</span>
+              </div>
+            ))}
+          </div>
+
+          {riskFactors.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">Risk Factors</p>
+              <ul className="space-y-1">
+                {riskFactors.slice(0, 6).map((f, i) => (
+                  <li key={i} className="text-xs text-danger flex gap-1.5">
+                    <span>⚠</span><span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {charges.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">Charges / Liens</p>
+              <div className="space-y-1">
+                {charges.slice(0, 5).map((ch, i) => (
+                  <div key={i} className="bg-surface-row rounded-lg px-3 py-2 flex justify-between text-xs">
+                    <span className="text-dark font-medium">{ch.lender || ch.holder || 'Unknown'}</span>
+                    <span className="text-text-muted">{ch.amount_cr ? `₹${ch.amount_cr} Cr` : ch.type || ''}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <h3 className="text-sm font-semibold text-dark mb-4">Bank Statement & GST Analysis</h3>
+          <div className="space-y-2 text-sm">
+            {[
+              { label: 'Circular Trading Score', value: `${(circularScore * 100).toFixed(0)}%`, flag: circularDetected },
+              { label: 'GSTR-2A vs 3B Risk', value: gstRisk, flag: gstRisk !== 'LOW' },
+              { label: 'ITC Match %', value: `${itcMatch.toFixed(1)}%`, flag: itcMatch < 90 },
+              { label: 'Revenue Divergence', value: `${revDiv.toFixed(1)}%`, flag: revDiv > 15 },
+              { label: 'Cheque Bounce Count (12m)', value: bounceCount, flag: bounceCount > 2 },
+            ].map(row => (
+              <div key={row.label} className="flex justify-between py-1.5 border-b border-border last:border-0">
+                <span className="text-text-muted text-xs">{row.label}</span>
+                <span className={`font-medium text-xs ${row.flag ? 'text-danger font-bold' : 'text-dark'}`}>
+                  {String(row.value)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {bankFlags.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">Risk Flags</p>
+              <ul className="space-y-1">
+                {bankFlags.slice(0, 6).map((f, i) => (
+                  <li key={i} className="text-xs text-danger flex gap-1.5">
+                    <span>⚠</span><span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Card>
       </div>
     </div>
