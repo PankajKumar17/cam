@@ -614,6 +614,7 @@ TARGET_COLOR   = "#0A1F3C"   # Navy (target company)
 def visualize_network(
     company_cin: str,
     output_path: Optional[str] = None,
+    contagion_result: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """
     Generate an interactive Plotly network graph for the promoter network.
@@ -746,8 +747,8 @@ def visualize_network(
             ))
 
     # ── Layout ───────────────────────────────────────────────────────────
-    # Compute contagion for annotation
-    contagion = compute_contagion_score(company_cin)
+    # Use pre-computed contagion result if provided, otherwise recompute
+    contagion = contagion_result if contagion_result is not None else compute_contagion_score(company_cin)
 
     fig = go.Figure(data=traces)
     fig.update_layout(
@@ -836,7 +837,7 @@ def run_network_analysis(
     result = compute_contagion_score(company_cin)
 
     if save_visualization:
-        viz_path = visualize_network(company_cin)
+        viz_path = visualize_network(company_cin, contagion_result=result)
         result["visualization_path"] = viz_path
     else:
         result["visualization_path"] = None

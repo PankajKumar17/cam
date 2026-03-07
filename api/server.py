@@ -67,6 +67,7 @@ _store: dict = {}
 _jobs: dict = {}
 
 _STORE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
+_JOBS_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed", "jobs")
 
 
 def _persist_analysis(analysis_id: str, data: dict) -> None:
@@ -80,17 +81,46 @@ def _persist_analysis(analysis_id: str, data: dict) -> None:
         pass
 
 
-def _load_persisted_stores() -> None:
-    """On startup, reload any previously saved analyses into _store."""
+def _persist_job(job_id: str, job: dict) -> None:
+    """Save job status to disk so polling survives a server crash/restart."""
     try:
-        if not os.path.isdir(_STORE_DIR):
-            return
-        for fname in os.listdir(_STORE_DIR):
-            if fname.startswith("analysis_") and fname.endswith(".json"):
-                aid = fname[len("analysis_"):-len(".json")]
-                path = os.path.join(_STORE_DIR, fname)
-                with open(path, "r", encoding="utf-8") as f:
-                    _store[aid] = json.load(f)
+        os.makedirs(_JOBS_DIR, exist_ok=True)
+        path = os.path.join(_JOBS_DIR, f"job_{job_id}.json")
+        # Never persist the full data blob in the job file — analysis is stored separately
+        slim = {k: v for k, v in job.items() if k != "data"}
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(slim, f, ensure_ascii=False, default=str)
+    except Exception:
+        pass
+
+
+def _load_persisted_stores() -> None:
+    """On startup, reload any previously saved analyses and jobs into memory."""
+    try:
+        if os.path.isdir(_STORE_DIR):
+            for fname in os.listdir(_STORE_DIR):
+                if fname.startswith("analysis_") and fname.endswith(".json"):
+                    aid = fname[len("analysis_"):-len(".json")]
+                    path = os.path.join(_STORE_DIR, fname)
+                    with open(path, "r", encoding="utf-8") as f:
+                        _store[aid] = json.load(f)
+    except Exception:
+        pass
+    try:
+        if os.path.isdir(_JOBS_DIR):
+            for fname in os.listdir(_JOBS_DIR):
+                if fname.startswith("job_") and fname.endswith(".json"):
+                    jid = fname[len("job_"):-len(".json")]
+                    path = os.path.join(_JOBS_DIR, fname)
+                    with open(path, "r", encoding="utf-8") as f:
+                        job = json.load(f)
+                    # If server crashed mid-run, mark as error so client stops polling
+                    if job.get("status") == "running":
+                        job = {"status": "error", "error": "Server restarted during analysis. Please resubmit."}
+                    # Re-attach data blob for done jobs
+                    if job.get("status") == "done" and job.get("analysis_id") in _store:
+                        job["data"] = _store[job["analysis_id"]]
+                    _jobs[jid] = job
     except Exception:
         pass
 
@@ -522,8 +552,10 @@ def _pipeline_worker(
         _store[analysis_id] = data
         _persist_analysis(analysis_id, data)
         _jobs[job_id] = {"status": "done", "analysis_id": analysis_id, "data": data}
+        _persist_job(job_id, {"status": "done", "analysis_id": analysis_id})
     except Exception as exc:
         _jobs[job_id] = {"status": "error", "error": str(exc)}
+        _persist_job(job_id, {"status": "error", "error": str(exc)})
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 

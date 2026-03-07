@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UploadCloud, CheckCircle, Lock, FileText, X, Brain, FileCheck, ArrowRight, Mic, ChevronDown, ChevronUp, Menu } from 'lucide-react'
 import { useAnalysis } from '../App'
-import { loadDemo, analyse } from '../api'
+import { loadDemo, analyse, warmupServer } from '../api'
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } }
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } } }
@@ -58,6 +58,13 @@ export default function Landing() {
   const [ceoMode, setCeoMode] = useState('skip') // 'skip' | 'audio' | 'transcript'
   const [ceoAudio, setCeoAudio] = useState(null)
   const [ceoTranscript, setCeoTranscript] = useState('')
+  // PDF documents optional
+  const [pdfExpanded, setPdfExpanded] = useState(false)
+  const [pdfFiles, setPdfFiles] = useState([])
+  // Credit officer qualitative notes
+  const [notesExpanded, setNotesExpanded] = useState(false)
+  const [qualitativeNotes, setQualitativeNotes] = useState('')
+  const [warmingUp, setWarmingUp] = useState(false)
   const { setAnalysis } = useAnalysis()
   const navigate = useNavigate()
 
@@ -87,6 +94,22 @@ export default function Landing() {
     if (!canSubmit) return
     setLoading(true)
     setError('')
+    setWarmingUp(false)
+    // Wake up Render if it has spun down, before starting the progress animation
+    try {
+      await warmupServer(() => {
+        setWarmingUp(true)
+        setProgress(2)
+        setStageLabel('Server is waking up after idle… this takes ~30s, hang tight!')
+      })
+    } catch (e) {
+      setLoading(false)
+      setProgress(0)
+      setWarmingUp(false)
+      setError(e.message)
+      return
+    }
+    setWarmingUp(false)
     startFakeProgress()
     try {
       const result = await analyse(
@@ -95,6 +118,8 @@ export default function Landing() {
         {
           ceoAudio: ceoMode === 'audio' ? ceoAudio : null,
           ceoTranscript: ceoMode === 'transcript' ? ceoTranscript : '',
+          pdfFiles: pdfFiles.length > 0 ? pdfFiles : null,
+          qualitativeNotes: qualitativeNotes.trim() || null,
         }
       )
       clearTimers()
@@ -113,6 +138,17 @@ export default function Landing() {
 
   async function handleDemo() {
     setLoadingDemo(true)
+    setError('')
+    // Wake up Render if it has spun down
+    try {
+      await warmupServer(() =>
+        setError('⏳ Server is waking up after idle (~30s)… retrying automatically, please wait.')
+      )
+    } catch (e) {
+      setError(e.message)
+      setLoadingDemo(false)
+      return
+    }
     setError('')
     try {
       const result = await loadDemo()
@@ -403,6 +439,134 @@ export default function Landing() {
                                            resize-y transition-all duration-150 font-[DM_Mono] leading-relaxed"
                               />
                             )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* ─── PDF Document Upload — Optional ──────────────────── */}
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setPdfExpanded(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl
+                                 border border-dashed border-border hover:border-orange hover:bg-orange-pale/30
+                                 transition-all duration-150 group"
+                    >
+                      <div className="flex items-center gap-2 text-sm">
+                        <FileText size={15} className="text-orange" />
+                        <span className="font-medium text-dark">Supporting Documents</span>
+                        <span className="text-xs text-text-muted bg-surface-page px-2 py-0.5 rounded-full">Optional — PDF</span>
+                      </div>
+                      {pdfExpanded
+                        ? <ChevronUp size={15} className="text-text-muted group-hover:text-orange transition-colors" />
+                        : <ChevronDown size={15} className="text-text-muted group-hover:text-orange transition-colors" />}
+                    </button>
+
+                    <AnimatePresence>
+                      {pdfExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: 'easeInOut' }}
+                          className="overflow-hidden"
+                        >
+                          <div className="pt-3 space-y-2">
+                            <p className="text-xs text-text-muted leading-relaxed">
+                              Upload Annual Reports, Legal Notices, or Sanction Letters. The AI will extract
+                              DINs, CINs, legal risks, and financial data automatically.
+                            </p>
+                            <div
+                              onClick={() => document.getElementById('pdf-upload-input').click()}
+                              className="border-2 border-dashed border-border rounded-xl p-4 flex flex-col items-center
+                                         gap-1.5 cursor-pointer hover:border-orange hover:bg-orange-pale/30 transition-all"
+                            >
+                              <FileText className="w-6 h-6 text-orange" />
+                              <span className="text-sm font-medium text-dark">Add PDF Documents</span>
+                              <span className="text-xs text-text-muted">Annual Report · Legal Notice · Sanction Letter · Max 100MB each</span>
+                              <input
+                                id="pdf-upload-input"
+                                type="file"
+                                accept=".pdf"
+                                multiple
+                                className="hidden"
+                                onChange={e => {
+                                  const selected = Array.from(e.target.files || [])
+                                  setPdfFiles(prev => {
+                                    const names = new Set(prev.map(f => f.name))
+                                    return [...prev, ...selected.filter(f => !names.has(f.name))]
+                                  })
+                                  e.target.value = ''
+                                }}
+                              />
+                            </div>
+                            {pdfFiles.length > 0 && (
+                              <div className="space-y-1.5">
+                                {pdfFiles.map((pf, i) => (
+                                  <div key={i} className="bg-surface-card border border-border rounded-xl px-3 py-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <FileText size={14} className="text-text-muted shrink-0" />
+                                      <span className="text-xs font-medium text-dark font-[DM_Mono] truncate max-w-[200px]">{pf.name}</span>
+                                      <span className="text-xs text-text-muted">{(pf.size / 1024).toFixed(0)} KB</span>
+                                    </div>
+                                    <button onClick={() => setPdfFiles(prev => prev.filter((_, j) => j !== i))} className="text-text-muted hover:text-danger transition-colors">
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* ─── Credit Officer Qualitative Notes — Optional ─────── */}
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setNotesExpanded(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl
+                                 border border-dashed border-border hover:border-navy hover:bg-navy/5
+                                 transition-all duration-150 group"
+                    >
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-navy text-base leading-none">✎</span>
+                        <span className="font-medium text-dark">Credit Officer Field Notes</span>
+                        <span className="text-xs text-text-muted bg-surface-page px-2 py-0.5 rounded-full">Optional</span>
+                      </div>
+                      {notesExpanded
+                        ? <ChevronUp size={15} className="text-text-muted group-hover:text-navy transition-colors" />
+                        : <ChevronDown size={15} className="text-text-muted group-hover:text-navy transition-colors" />}
+                    </button>
+
+                    <AnimatePresence>
+                      {notesExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: 'easeInOut' }}
+                          className="overflow-hidden"
+                        >
+                          <div className="pt-3">
+                            <p className="text-xs text-text-muted mb-2 leading-relaxed">
+                              Site visit observations, mgmt behaviour, capacity utilisation, collateral quality
+                              — anything not captured in the financials. The AI will factor these into its risk assessment.
+                            </p>
+                            <textarea
+                              value={qualitativeNotes}
+                              onChange={e => setQualitativeNotes(e.target.value)}
+                              placeholder={`e.g.\n• Factory operating at ~40% capacity\n• Management evasive on working capital cycle\n• Promoter recently reduced pledge stake by 12%\n• Site visit: machinery visibly idle in Unit 2`}
+                              rows={5}
+                              className="w-full px-4 py-3 rounded-xl border border-border text-xs text-dark
+                                         bg-white placeholder:text-text-placeholder focus:outline-none
+                                         focus:border-navy focus:shadow-[0_0_0_3px_rgba(10,35,80,0.12)]
+                                         resize-y transition-all duration-150 font-[DM_Mono] leading-relaxed"
+                            />
                           </div>
                         </motion.div>
                       )}

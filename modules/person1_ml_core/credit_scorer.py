@@ -552,8 +552,12 @@ def predict(feature_row: pd.Series,
         with open(os.path.join(MODELS_DIR, "scaler.pkl"), "rb") as f:
             scaler = pickle.load(f)
 
-    # Prepare single row
-    feature_cols = [c for c in feature_row.index if c not in DROP_COLS]
+    # Prepare single row — filter to scalar numeric columns only
+    # (list-valued columns like dscr_history/fiscal_years cause numpy shape errors)
+    feature_cols = [
+        c for c in feature_row.index
+        if c not in DROP_COLS and not isinstance(feature_row[c], (list, dict, np.ndarray))
+    ]
     X_raw = feature_row[feature_cols].values.reshape(1, -1)
     X_raw = np.nan_to_num(X_raw, nan=0.0, posinf=0.0, neginf=0.0)
     X_scaled = scaler.transform(X_raw)
