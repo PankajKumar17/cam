@@ -1,4 +1,8 @@
-﻿#  CORE DATA & ML 
+﻿# PyTorch CPU-only (much smaller than full CUDA build)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.1.0
+
+# Core data & ML
 pandas>=2.1.0
 openpyxl>=3.1.0
 numpy>=1.24.0
@@ -8,53 +12,43 @@ lightgbm>=4.1.0
 shap>=0.43.0
 imbalanced-learn>=0.11.0
 scipy>=1.11.0
-
-#  TIME SERIES ML 
-torch>=2.1.0
 statsmodels>=0.14.0
 
-#  GRAPH 
+# Graph
 networkx>=3.1
 
-#  LLM & AGENTS 
+# LLM & Agents
 langchain>=0.1.0
 langgraph>=0.0.40
 google-genai>=1.0.0
 tavily-python>=0.3.0
 
-#  SATELLITE IMAGERY 
+# Satellite imagery
 tifffile>=2023.1.0
 Pillow>=10.0.0
-
-#  WEB SCRAPING & RESEARCH 
-beautifulsoup4>=4.12.0
 requests>=2.31.0
+
+# Web scraping
+beautifulsoup4>=4.12.0
 lxml>=4.9.0
 
-#  CEO INTERVIEW / AUDIO 
-openai-whisper>=20231117
-librosa>=0.10.1
-vaderSentiment>=3.3.2
-transformers>=4.36.0
-
-#  DOCUMENT GENERATION 
+# Document generation
 python-docx>=1.1.0
 
-#  PDF PARSING 
+# PDF parsing
 pdfplumber>=0.10.0
 pymupdf>=1.23.0
 
-#  VISUALIZATION 
+# Visualization
 plotly>=5.18.0
 matplotlib>=3.8.0
-seaborn>=0.13.0
 
-#  API & BACKEND 
+# API & Backend
 fastapi>=0.104.0
 uvicorn>=0.24.0
 python-multipart>=0.0.9
 
-#  UTILITIES 
+# Utilities
 python-dotenv>=1.0.0
 pydantic>=2.5.0
 tqdm>=4.66.0
