@@ -644,7 +644,7 @@ def generate_financial_analysis(doc, data: dict):
 
 def generate_forensics_section(doc, data: dict):
     """Beneish M-Score, Altman Z-Score, Piotroski F-Score, audit flags."""
-    _add_styled_heading(doc, "4. Financial Forensics", level=1)
+    _add_styled_heading(doc, "4. Financial Forensics & Fraud Detection", level=1)
 
     forensics = _g(data, "forensics", default={})
     fin = _g(data, "financial_data", default={})
@@ -653,35 +653,88 @@ def generate_forensics_section(doc, data: dict):
               "to detect potential earnings manipulation, bankruptcy risk, and financial strength.",
               size=10, italic=True)
 
-    # Beneish M-Score
+    # ── Beneish M-Score ──────────────────────────────────────────────────
     _add_styled_heading(doc, "Beneish M-Score (Earnings Manipulation)", level=2)
     m_score = _g(forensics, "beneish_m_score", default=_g(fin, "beneish_m_score", default="Not Given"))
-    m_flag = "SUSPICIOUS" if m_score not in ("N/A", "Not Given") and float(m_score) > -2.22 else "CLEAN"
+    beneish_flag = _g(forensics, "beneish_flag", default="")
+    m_flag = beneish_flag if beneish_flag else (
+        "MANIPULATOR" if m_score not in ("N/A", "Not Given") and float(m_score) > -2.22 else "CLEAN"
+    )
     _add_risk_badge(doc, f"M-Score: {_fmt(m_score)}", m_flag)
     _add_para(doc, "Threshold: > -2.22 indicates potential manipulation (Beneish 1999).", size=9, color=GREY)
 
-    # Altman Z-Score
+    # Beneish 8-component table
+    beneish_components = [
+        ("DSRI",  _g(forensics, "beneish_dsri",  default=_g(fin, "beneish_dsri",  default="N/A")), 1.465, "Days Sales Receivables Index"),
+        ("GMI",   _g(forensics, "beneish_gmi",   default="N/A"), 1.014, "Gross Margin Index"),
+        ("AQI",   _g(forensics, "beneish_aqi",   default="N/A"), 1.254, "Asset Quality Index"),
+        ("SGI",   _g(forensics, "beneish_sgi",   default="N/A"), 1.607, "Sales Growth Index"),
+        ("DEPI",  _g(forensics, "beneish_depi",  default="N/A"), 1.077, "Depreciation Index"),
+        ("SGAI",  _g(forensics, "beneish_sgai",  default="N/A"), 1.041, "SG&A Expenses Index"),
+        ("TATA",  _g(forensics, "beneish_tata",  default=_g(fin, "beneish_tata",  default="N/A")), 0.031, "Total Accruals to Total Assets"),
+        ("LVGI",  _g(forensics, "beneish_lvgi",  default="N/A"), 1.111, "Leverage Index"),
+    ]
+    comp_rows = []
+    for name, val, thresh, desc in beneish_components:
+        try:
+            v = float(val)
+            flag = "RED" if v > thresh else "GREEN"
+            val_str = f"{v:.3f}"
+        except (TypeError, ValueError):
+            flag = "N/A"
+            val_str = str(val)
+        comp_rows.append([name, val_str, f"{thresh:.3f}", flag, desc])
+    _create_table(doc, ["Index", "Value", "Threshold", "Flag", "Description"], comp_rows)
+
+    red_flags = _g(forensics, "beneish_red_flags", default=[])
+    if red_flags and isinstance(red_flags, list):
+        for rf in red_flags:
+            _add_para(doc, f"  ⚠ {rf}", size=9, color=RED)
+
+    # ── Altman Z-Score ──────────────────────────────────────────────────
     _add_styled_heading(doc, "Altman Z-Score (Bankruptcy Risk)", level=2)
     z_score = _g(forensics, "altman_z_score", default=_g(fin, "altman_z_score", default="Not Given"))
-    if z_score not in ("N/A", "Not Given"):
+    z_zone  = _g(forensics, "altman_zone", default="")
+    if not z_zone and z_score not in ("N/A", "Not Given"):
         z_val = float(z_score)
-        z_flag = "SAFE" if z_val > 2.99 else ("GREY ZONE" if z_val > 1.81 else "DISTRESS")
-    else:
-        z_flag = "N/A"
-    _add_risk_badge(doc, f"Z-Score: {_fmt(z_score)}", z_flag)
-    _add_para(doc, "Zones: >2.99 = Safe, 1.81-2.99 = Grey, <1.81 = Distress (Altman 1968).", size=9, color=GREY)
+        z_zone = "SAFE" if z_val > 2.99 else ("GREY" if z_val > 1.81 else "DISTRESS")
+    _add_risk_badge(doc, f"Z-Score: {_fmt(z_score)}", z_zone or "N/A")
+    _add_para(doc, "Zones: >2.99 = Safe, 1.81-2.99 = Grey Zone, <1.81 = Distress (Altman 1968).", size=9, color=GREY)
 
-    # Piotroski F-Score
+    # Altman components if available
+    altman_comps = _g(forensics, "altman_components", default={})
+    if altman_comps and isinstance(altman_comps, dict):
+        az_rows = [[k, _fmt(v)] for k, v in altman_comps.items() if v not in ("N/A", "Not Given", None)]
+        if az_rows:
+            _create_table(doc, ["Component", "Value"], az_rows)
+
+    # ── Piotroski F-Score ──────────────────────────────────────────────
     _add_styled_heading(doc, "Piotroski F-Score (Financial Strength)", level=2)
     f_score = _g(forensics, "piotroski_f_score", default=_g(fin, "piotroski_f_score", default="Not Given"))
-    if f_score not in ("N/A", "Not Given"):
+    f_strength = _g(forensics, "piotroski_strength", default="")
+    if not f_strength and f_score not in ("N/A", "Not Given"):
         f_val = int(float(f_score))
-        f_flag = "STRONG" if f_val >= 7 else ("MODERATE" if f_val >= 4 else "WEAK")
-    else:
-        f_flag = "N/A"
-    _add_risk_badge(doc, f"F-Score: {f_score}/9", f_flag)
+        f_strength = "STRONG" if f_val >= 7 else ("MODERATE" if f_val >= 4 else "WEAK")
+    _add_risk_badge(doc, f"F-Score: {f_score}/9 \u2014 {f_strength or 'N/A'}", f_strength or "N/A")
+    _add_para(doc, "9 binary signals across Profitability, Leverage/Liquidity, and Operating Efficiency (Piotroski 2000).",
+              size=9, color=GREY)
 
-    # Audit quality flags
+    # Piotroski 9-signal breakdown
+    p_signals = _g(forensics, "piotroski_signals", default=[])
+    if p_signals and isinstance(p_signals, list):
+        ps_rows = []
+        for sig in p_signals:
+            if isinstance(sig, dict):
+                passed = sig.get("passed", False)
+                ps_rows.append([
+                    sig.get("signal", "?"),
+                    sig.get("group", "?"),
+                    "✓ Pass" if passed else "✗ Fail",
+                ])
+        if ps_rows:
+            _create_table(doc, ["Signal", "Group", "Result"], ps_rows)
+
+    # ── Audit Quality ─────────────────────────────────────────────────────
     _add_styled_heading(doc, "Audit Quality Indicators", level=2)
     audit_headers = ["Indicator", "Value", "Flag"]
     audit_rows = [
@@ -705,9 +758,129 @@ def generate_forensics_section(doc, data: dict):
 # •‘  SECTION 6 — PROMOTER NETWORK ANALYSIS                                    •‘
 # •š•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 
+def generate_mca_legal_section(doc, data: dict):
+    """MCA filing compliance, DIN disqualification, NCLT cases, and legal risk."""
+    _add_styled_heading(doc, "5. MCA Compliance & Legal Intelligence", level=1)
+
+    mca = _g(data, "mca_legal", default={})
+
+    _add_para(doc,
+              "Legal intelligence gathered from the Ministry of Corporate Affairs (MCA21) database — "
+              "director DIN status, NCLT litigation, registered charges, and statutory filings.",
+              size=10, italic=True)
+
+    # Overall legal risk
+    legal_score = _g(mca, "legal_risk_score", default="Not Given")
+    legal_level = _g(mca, "legal_risk_level", default="Not Given")
+    if not _not_given(legal_score):
+        _add_risk_badge(doc, f"Legal Risk Score: {legal_score}/100 — {legal_level}", str(legal_level).upper())
+    else:
+        _add_para(doc, "Legal risk score: Not assessed (MCA API unavailable).", size=10, color=GREY, italic=True)
+
+    # Key metrics table
+    mca_headers = ["Indicator", "Value", "Assessment"]
+
+    # legal_cases may be a list or a count integer
+    _raw_cases = _g(mca, "active_legal_cases", default=_g(mca, "legal_cases", default=0))
+    _case_count = len(_raw_cases) if isinstance(_raw_cases, list) else (int(_raw_cases) if str(_raw_cases).lstrip("-").isdigit() else 0)
+    _case_display = str(_case_count) if not isinstance(_raw_cases, str) else str(_raw_cases)
+
+    _raw_charges = _g(mca, "charges", default=0)
+    _charge_count = len(_raw_charges) if isinstance(_raw_charges, list) else (int(_raw_charges) if str(_raw_charges).lstrip("-").isdigit() else 0)
+
+    mca_rows = [
+        ["DIN-Disqualified Directors", str(_g(mca, "din_disqualified_count", default="N/A")),
+         "RED" if _g(mca, "din_disqualified_count", default=0) > 0 else "GREEN"],
+        ["NCLT / Insolvency Proceedings", "Yes" if _g(mca, "nclt_case", default=False) else "No",
+         "RED" if _g(mca, "nclt_case", default=False) else "GREEN"],
+        ["Active Legal Cases", _case_display,
+         "AMBER" if _case_count > 0 else "GREEN"],
+        ["Registered Charges", str(_g(mca, "charges", default="N/A")),
+         "AMBER" if _charge_count > 0 else "GREEN"],
+    ]
+    _create_table(doc, mca_headers, mca_rows)
+
+    # Risk factors
+    risk_factors = _g(mca, "risk_factors", default=[])
+    if risk_factors and isinstance(risk_factors, list):
+        _add_styled_heading(doc, "Identified Legal Risk Factors", level=2)
+        for rf in risk_factors:
+            _add_para(doc, f"  \u26a0 {rf}", size=9, color=AMBER)
+
+    # MCA summary narrative
+    summary = _g(mca, "summary", default=None)
+    if summary and not _not_given(summary):
+        _add_styled_heading(doc, "MCA Intelligence Summary", level=2)
+        _add_para(doc, str(summary), size=10, italic=True)
+
+    _add_page_break(doc)
+
+
+def generate_bank_analysis_section(doc, data: dict):
+    """Bank statement analysis — circular trading, GSTR-2A vs 3B, ITC mismatch."""
+    _add_styled_heading(doc, "5a. Bank Statement & Circular Trading Analysis", level=1)
+
+    bank = _g(data, "bank_analysis", default={})
+
+    _add_para(doc,
+              "Proprietary analysis of bank statement data to detect circular trading patterns, "
+              "GSTR-2A vs GSTR-3B reconciliation anomalies, and ITC mismatches.",
+              size=10, italic=True)
+
+    # Overall bank risk
+    overall_risk  = _g(bank, "overall_bank_risk_score", default="Not Given")
+    overall_level = _g(bank, "overall_bank_risk_level",  default="Not Given")
+    if not _not_given(overall_risk):
+        _add_risk_badge(doc,
+                        f"Overall Bank Risk Score: {overall_risk}/100 — {overall_level}",
+                        str(overall_level).upper())
+    else:
+        _add_para(doc, "Bank risk assessment: Not assessed (no bank statement provided).",
+                  size=10, color=GREY, italic=True)
+
+    # Circular trading
+    _add_styled_heading(doc, "Circular Trading Detection", level=2)
+    circ_score  = _g(bank, "circular_trading_score", default="N/A")
+    circ_detect = _g(bank, "circular_detected", default=False)
+    _add_risk_badge(doc,
+                    f"Circular Trading Score: {circ_score} — {'DETECTED' if circ_detect else 'NOT DETECTED'}",
+                    "RED" if circ_detect else "GREEN")
+
+    # GST reconciliation
+    _add_styled_heading(doc, "GSTR-2A vs GSTR-3B Reconciliation", level=2)
+    gst_risk   = _g(bank, "gst_2a_3b_risk_level",    default="N/A")
+    itc_match  = _g(bank, "itc_match_pct",            default="N/A")
+    rev_div    = _g(bank, "revenue_divergence_pct",   default="N/A")
+    bounce_cnt = _g(bank, "bounce_count_12m",         default="N/A")
+
+    gst_headers = ["Indicator", "Value", "Flag"]
+    gst_rows = [
+        ["GSTR-2A vs 3B Risk Level", str(gst_risk),
+         "RED" if str(gst_risk).upper() in ("HIGH", "CRITICAL") else "GREEN"],
+        ["ITC Match Percentage",
+         _pct(itc_match) if not _not_given(itc_match) else "N/A",
+         "RED" if not _not_given(itc_match) and float(itc_match) < 0.85 else "GREEN"],
+        ["Revenue Divergence (Bank vs GST)",
+         _pct(rev_div) if not _not_given(rev_div) else "N/A",
+         "AMBER" if not _not_given(rev_div) and float(rev_div) > 0.15 else "GREEN"],
+        ["Cheque / ECS Bounce Count (12m)", str(bounce_cnt),
+         "RED" if not _not_given(bounce_cnt) and bounce_cnt not in ("N/A", "Not Given") and (int(float(str(bounce_cnt))) if str(bounce_cnt).replace(".","").isdigit() else 0) > 3 else "GREEN"],
+    ]
+    _create_table(doc, gst_headers, gst_rows)
+
+    # Risk flags
+    risk_flags = _g(bank, "all_risk_flags", default=[])
+    if risk_flags and isinstance(risk_flags, list):
+        _add_styled_heading(doc, "Bank Risk Flags", level=2)
+        for rf in risk_flags:
+            _add_para(doc, f"  \U0001f6a9 {rf}", size=9, color=RED)
+
+    _add_page_break(doc)
+
+
 def generate_network_section(doc, data: dict):
     """Promoter network description and contagion risk."""
-    _add_styled_heading(doc, "5. Promoter Network & Contagion Risk", level=1)
+    _add_styled_heading(doc, "6. Promoter Network & Contagion Risk", level=1)
 
     network = _g(data, "network", default={})
     fin = _g(data, "financial_data", default={})
@@ -754,7 +927,7 @@ def generate_network_section(doc, data: dict):
 
 def generate_satellite_section(doc, data: dict):
     """Satellite-based operational activity assessment."""
-    _add_styled_heading(doc, "6. Satellite Activity & Operational Reality", level=1)
+    _add_styled_heading(doc, "7. Satellite Activity & Operational Reality", level=1)
 
     satellite = _g(data, "satellite", default={})
     fin = _g(data, "financial_data", default={})
@@ -804,7 +977,7 @@ def generate_satellite_section(doc, data: dict):
 
 def generate_stress_test_section(doc, data: dict):
     """Monte Carlo stress test results — P10/P50/P90 and named scenarios."""
-    _add_styled_heading(doc, "7. Stress Test Results", level=1)
+    _add_styled_heading(doc, "8. Stress Test Results", level=1)
 
     stress = _g(data, "stress_test", default={})
 
@@ -869,11 +1042,25 @@ def generate_stress_test_section(doc, data: dict):
 def generate_management_section(doc, data: dict):
     """CEO interview insights and management quality score.
     Rule 5: Only show detailed scores if transcript was provided."""
-    _add_styled_heading(doc, "8. Management Quality Assessment", level=1)
+    _add_styled_heading(doc, "9. Management Quality Assessment", level=1)
 
     ceo = _g(data, "ceo_interview", default={})
     scores = _g(ceo, "key_scores", default={})
     used_fallback = _g(ceo, "used_fallback", default=True)
+
+    # Credit officer qualitative field notes (if provided)
+    qual_notes = _g(data, "qualitative_notes", default=None)
+    if qual_notes and str(qual_notes).strip():
+        _add_styled_heading(doc, "Credit Officer Field Notes", level=2)
+        _add_para(doc,
+                  "Qualitative observations recorded by the credit officer during site visit / "
+                  "management interaction. These observations supplement the quantitative model scores.",
+                  size=9, italic=True, color=GREY)
+        for line in str(qual_notes).splitlines():
+            line = line.strip()
+            if line:
+                _add_para(doc, f"  \u2022 {line.lstrip('\u2022-* ')}", size=10)
+        doc.add_paragraph("")
 
     # Rule 5: Gate on transcript availability
     if used_fallback:
@@ -932,7 +1119,7 @@ def generate_management_section(doc, data: dict):
 
 def generate_bull_bear_section(doc, data: dict):
     """Side-by-side adversarial bull and bear case arguments."""
-    _add_styled_heading(doc, "9. Adversarial Credit Committee Debate", level=1)
+    _add_styled_heading(doc, "10. Adversarial Credit Committee Debate", level=1)
 
     _add_para(doc, "Two independent LLM agents debated this application — one building "
               "the strongest case for approval, the other seeking every reason to reject. "
@@ -962,7 +1149,7 @@ def generate_bull_bear_section(doc, data: dict):
 
 def generate_recommendation(doc, data: dict):
     """Final verdict with conditions and signatures."""
-    _add_styled_heading(doc, "10. Final Recommendation & Decision", level=1)
+    _add_styled_heading(doc, "11. Final Recommendation & Decision", level=1)
 
     rec = _g(data, "recommendation", default={})
 
@@ -1200,6 +1387,12 @@ def generate_cam(
 
     logger.info("Generating Section 5: Financial Forensics")
     generate_forensics_section(doc, all_data)
+
+    logger.info("Generating Section 5b: MCA Legal & Compliance")
+    generate_mca_legal_section(doc, all_data)
+
+    logger.info("Generating Section 5c: Bank Statement & Circular Trading")
+    generate_bank_analysis_section(doc, all_data)
 
     logger.info("Generating Section 6: Network Analysis")
     generate_network_section(doc, all_data)
