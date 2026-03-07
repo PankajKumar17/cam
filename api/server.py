@@ -10,6 +10,7 @@ import json
 import uuid
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -60,6 +61,10 @@ app.add_middleware(
 
 # In-memory store for analysis results (single-user hackathon demo)
 _store: dict = {}
+
+# Job queue for async pipeline execution
+# {job_id: {"status": "running"|"done"|"error", "analysis_id": str, "error": str}}
+_jobs: dict = {}
 
 _STORE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
 
@@ -490,6 +495,39 @@ async def load_demo():
     return {"analysis_id": analysis_id, "data": data}
 
 
+def _pipeline_worker(
+    job_id: str,
+    tmp_dir: str,
+    tmp_path: str,
+    company_name: str,
+    ceo_audio_path,
+    ceo_transcript,
+    saved_pdf_paths,
+    qualitative_notes,
+):
+    """Background thread: runs the full pipeline then updates _jobs."""
+    try:
+        company_data = parse_screener_excel(tmp_path, company_name=company_name)
+        raw_results = run_pipeline(
+            company_name=company_name,
+            company_data=company_data,
+            output_dir=os.path.join(PROJECT_ROOT, "data", "processed"),
+            ceo_audio_path=ceo_audio_path,
+            ceo_transcript=ceo_transcript or None,
+            pdf_paths=saved_pdf_paths or None,
+            qualitative_notes=qualitative_notes or None,
+        )
+        data = _adapt_pipeline_results(raw_results)
+        analysis_id = str(uuid.uuid4())[:8]
+        _store[analysis_id] = data
+        _persist_analysis(analysis_id, data)
+        _jobs[job_id] = {"status": "done", "analysis_id": analysis_id, "data": data}
+    except Exception as exc:
+        _jobs[job_id] = {"status": "error", "error": str(exc)}
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 @app.post("/api/analyse")
 async def analyse(
     company_name: str = Form(...),
@@ -499,7 +537,7 @@ async def analyse(
     pdf_files: Optional[List[UploadFile]] = File(None),
     qualitative_notes: Optional[str] = Form(None),
 ):
-    """Upload financials (and optionally CEO interview audio/transcript + PDF documents) then run the pipeline."""
+    """Accept uploads, start the pipeline in a background thread, return job_id immediately."""
     allowed_ext = {".xlsx", ".xls", ".csv"}
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in allowed_ext:
@@ -517,64 +555,66 @@ async def analyse(
                 if not pf.filename.lower().endswith(".pdf"):
                     raise HTTPException(400, f"PDF upload '{pf.filename}' is not a .pdf file")
 
-    # Save uploads to temp dir
+    # Save all uploads to a temp dir that the worker thread will clean up
     tmp_dir = tempfile.mkdtemp()
-    tmp_path = os.path.join(tmp_dir, file.filename)
-    ceo_audio_path = None
-    saved_pdf_paths: List[str] = []
     try:
+        tmp_path = os.path.join(tmp_dir, file.filename)
+        content = await file.read()
+        if len(content) > 200 * 1024 * 1024:
+            raise HTTPException(413, "File too large (max 200MB)")
         with open(tmp_path, "wb") as f:
-            content = await file.read()
-            if len(content) > 200 * 1024 * 1024:  # 200MB limit
-                raise HTTPException(413, "File too large (max 200MB)")
             f.write(content)
 
-        # Save CEO audio if provided
+        ceo_audio_path = None
         if ceo_audio and ceo_audio.filename:
             ceo_tmp_path = os.path.join(tmp_dir, ceo_audio.filename)
             audio_content = await ceo_audio.read()
-            if len(audio_content) > 500 * 1024 * 1024:  # 500MB limit for audio
+            if len(audio_content) > 500 * 1024 * 1024:
                 raise HTTPException(413, "Audio file too large (max 500MB)")
             with open(ceo_tmp_path, "wb") as f:
                 f.write(audio_content)
             ceo_audio_path = ceo_tmp_path
 
-        # Save PDF documents if provided
+        saved_pdf_paths: List[str] = []
         if pdf_files:
             for pf in pdf_files:
                 if pf and pf.filename:
                     pdf_tmp_path = os.path.join(tmp_dir, pf.filename)
                     pdf_content = await pf.read()
-                    if len(pdf_content) > 100 * 1024 * 1024:  # 100MB per PDF
+                    if len(pdf_content) > 100 * 1024 * 1024:
                         raise HTTPException(413, f"PDF '{pf.filename}' too large (max 100MB)")
                     with open(pdf_tmp_path, "wb") as f:
                         f.write(pdf_content)
                     saved_pdf_paths.append(pdf_tmp_path)
 
-        # Parse the uploaded financials
-        company_data = parse_screener_excel(tmp_path, company_name=company_name)
+        job_id = str(uuid.uuid4())[:8]
+        _jobs[job_id] = {"status": "running"}
 
-        # Run the full pipeline
-        raw_results = run_pipeline(
-            company_name=company_name,
-            company_data=company_data,
-            output_dir=os.path.join(PROJECT_ROOT, "data", "processed"),
-            ceo_audio_path=ceo_audio_path,
-            ceo_transcript=ceo_transcript or None,
-            pdf_paths=saved_pdf_paths or None,
-            qualitative_notes=qualitative_notes or None,
+        t = threading.Thread(
+            target=_pipeline_worker,
+            args=(job_id, tmp_dir, tmp_path, company_name,
+                  ceo_audio_path, ceo_transcript, saved_pdf_paths, qualitative_notes),
+            daemon=True,
         )
+        t.start()
 
-        # Adapt to dashboard format
-        data = _adapt_pipeline_results(raw_results)
-        analysis_id = str(uuid.uuid4())[:8]
-        _store[analysis_id] = data
-        _persist_analysis(analysis_id, data)
+        return {"job_id": job_id}
 
-        return {"analysis_id": analysis_id, "data": data}
-
-    finally:
+    except HTTPException:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+    except Exception as exc:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/job/{job_id}")
+async def job_status(job_id: str):
+    """Poll the status of a running pipeline job."""
+    job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    return job
 
 
 @app.get("/api/analysis/{analysis_id}")
