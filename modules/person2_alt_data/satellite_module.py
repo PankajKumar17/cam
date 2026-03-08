@@ -10,6 +10,7 @@ Parts:
   C — Classification (ACTIVE / MODERATE / LOW / DORMANT)
   D — Fallback mode (synthetic proxy score when API unavailable)
   E — Revenue Consistency Check (e-way bill proxy vs satellite flag)
+  F — Coordinate lookup via Tavily (auto-resolves factory GPS for any company)
 
 Author: Person 2
 Module: modules/person2_alt_data/satellite_module.py
@@ -38,6 +39,12 @@ try:
 except ImportError:
     logger.warning("requests not installed — Sentinel Hub API unavailable")
     REQUESTS_AVAILABLE = False
+
+try:
+    from tavily import TavilyClient
+    TAVILY_AVAILABLE = True
+except ImportError:
+    TAVILY_AVAILABLE = False
 
 try:
     import matplotlib
@@ -89,7 +96,7 @@ DEMO_COMPANIES: Dict[str, Dict[str, Any]] = {
         "industry_avg_revenue_cr": 900.0,
     },
     "Suzlon Energy": {
-        "lat": 18.52, "lon": 73.85,
+        "lat": 22.30, "lon": 70.80,
         "sector": "Power",
         "base_activity": 65,
         "revenue_cr": 5200.0,
@@ -110,6 +117,86 @@ DEMO_COMPANIES: Dict[str, Dict[str, Any]] = {
         "industry_avg_revenue_cr": 900.0,
     },
 }
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  PART F — COORDINATE LOOKUP VIA TAVILY                                   ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+_COORD_CACHE: Dict[str, Tuple[float, float]] = {}
+
+
+def _lookup_coordinates_via_tavily(company_name: str) -> Optional[Tuple[float, float]]:
+    """
+    Use Tavily to search for a company's factory / HQ GPS coordinates.
+
+    Queries: "<company_name> factory location GPS latitude longitude India"
+    Parses the first decimal lat/lon pair found in any result snippet.
+
+    Returns:
+        (lat, lon) tuple if found, or None on failure.
+    """
+    if not TAVILY_AVAILABLE:
+        logger.debug("Tavily not installed — skipping coordinate lookup")
+        return None
+
+    api_key = os.getenv("TAVILY_API_KEY")
+    if not api_key:
+        logger.debug("TAVILY_API_KEY not set — skipping coordinate lookup")
+        return None
+
+    if company_name in _COORD_CACHE:
+        logger.debug(f"Coordinate cache hit for {company_name!r}")
+        return _COORD_CACHE[company_name]
+
+    import re
+
+    queries = [
+        f"{company_name} factory location GPS latitude longitude India",
+        f"{company_name} manufacturing plant address coordinates India",
+    ]
+
+    # Regex: decimal degrees like 18.5200, 73.8500 or -33.9, 151.2
+    _coord_re = re.compile(
+        r"(-?\d{1,3}\.\d{2,6})[^\d-]{1,10}(-?\d{1,3}\.\d{2,6})"
+    )
+
+    try:
+        client = TavilyClient(api_key=api_key)
+        for query in queries:
+            try:
+                response = client.search(
+                    query=query,
+                    search_depth="basic",
+                    max_results=5,
+                )
+                for result in response.get("results", []):
+                    text = " ".join([
+                        result.get("title", ""),
+                        result.get("content", ""),
+                        result.get("url", ""),
+                    ])
+                    for m in _coord_re.finditer(text):
+                        lat_c = float(m.group(1))
+                        lon_c = float(m.group(2))
+                        # Sanity check: valid WGS84 range, India-ish bounding box
+                        if 6.0 <= lat_c <= 37.0 and 68.0 <= lon_c <= 97.0:
+                            logger.info(
+                                f"Tavily resolved {company_name!r} "
+                                f"→ lat={lat_c}, lon={lon_c}"
+                            )
+                            _COORD_CACHE[company_name] = (lat_c, lon_c)
+                            return (lat_c, lon_c)
+            except Exception as e:
+                logger.debug(f"Tavily coordinate query failed: {e}")
+    except Exception as e:
+        logger.warning(f"Tavily coordinate lookup error: {e}")
+
+    logger.warning(
+        f"Tavily could not resolve coordinates for {company_name!r} — "
+        f"falling back to default location"
+    )
+    return None
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -591,8 +678,10 @@ def _compute_fallback_activity(
         hash_val = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
         base = 30 + (hash_val % 50)   # Range 30-79
 
-    # Add small noise for realism
-    rng = np.random.default_rng(RANDOM_SEED)
+    # Add small noise for realism — seed from company identity so each call is unique
+    seed_str = f"{company_name}:{lat:.4f}:{lon:.4f}"
+    fallback_seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16) % (2**31)
+    rng = np.random.default_rng(fallback_seed)
     noise = rng.normal(0, 3)
     score = round(min(max(base + noise, 0), 100), 2)
 
@@ -786,6 +875,19 @@ def get_factory_activity(
     """
     logger.info(f"{'='*60}")
     logger.info(f"SATELLITE ACTIVITY ANALYSIS — {company_name}")
+
+    # ── Auto-resolve coordinates via Tavily if caller left defaults ──────
+    using_defaults = (lat == DEFAULT_LAT and lon == DEFAULT_LON)
+    in_demo = company_name in DEMO_COMPANIES
+    if using_defaults and not in_demo:
+        resolved = _lookup_coordinates_via_tavily(company_name)
+        if resolved:
+            lat, lon = resolved
+    elif in_demo and using_defaults:
+        # Use the lat/lon stored in DEMO_COMPANIES when nothing explicit given
+        lat = DEMO_COMPANIES[company_name]["lat"]
+        lon = DEMO_COMPANIES[company_name]["lon"]
+
     logger.info(f"Location: ({lat}, {lon})")
     logger.info(f"{'='*60}")
 
