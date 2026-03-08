@@ -367,7 +367,7 @@ function SatelliteTab({ sat }) {
   const subScores = [
     { label: 'NDVI Score', value: ndviScore, weight: '35%', color: '#1565C0', desc: 'Low NDVI = industrial activity (good for factory)' },
     { label: 'Brightness Score', value: brightnessScore, weight: '40%', color: '#E8470A', desc: 'Higher pixel brightness = more surface activity' },
-    { label: 'Temporal Delta', value: deltaScore, weight: '25%', color: '#10B981', desc: 'Change in brightness vs 6-month baseline' },
+    { label: 'Temporal Delta', value: deltaScore, weight: '25%', color: '#10B981', desc: 'Year-over-year brightness change (monsoon-safe baseline)' },
   ]
 
   return (
@@ -410,7 +410,13 @@ function SatelliteTab({ sat }) {
           ) : (
             <EmptyState icon={Satellite} title="Baseline unavailable" subtitle="No historical image found" />
           )}
-          <p className="text-xs text-text-muted mt-2">{sat.baseline_date || '~6 months ago'} · RGB composite (B04/B03/B02)</p>
+          <p className="text-xs text-text-muted mt-2">{sat.baseline_date || '~1 year ago'} · RGB composite (B04/B03/B02)</p>
+          {sat.baseline_date_reason && (
+            <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+              <span className="text-amber-500 mt-px text-[11px]">☁</span>
+              <p className="text-[10px] text-amber-700 leading-tight">{sat.baseline_date_reason}</p>
+            </div>
+          )}
         </Card>
       </div>
 

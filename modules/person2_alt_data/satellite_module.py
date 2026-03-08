@@ -128,13 +128,16 @@ _COORD_CACHE: Dict[str, Tuple[float, float]] = {}
 
 def _lookup_coordinates_via_tavily(company_name: str) -> Optional[Tuple[float, float]]:
     """
-    Use Tavily to search for a company's factory / HQ GPS coordinates.
+    Use Tavily to search for a company's HQ / factory GPS coordinates.
 
-    Queries: "<company_name> factory location GPS latitude longitude India"
-    Parses the first decimal lat/lon pair found in any result snippet.
+    Strategy (in order):
+      1. Search for explicit GPS decimal-degree pairs in snippets
+         (handles both "lat, lon" inline and "Latitude: X Longitude: Y" formats)
+      2. If no raw coordinates found, extracts city names from snippets
+         and maps them to a pre-built India city → (lat, lon) table.
 
     Returns:
-        (lat, lon) tuple if found, or None on failure.
+        (lat, lon) tuple if resolved, or None on failure.
     """
     if not TAVILY_AVAILABLE:
         logger.debug("Tavily not installed — skipping coordinate lookup")
@@ -151,15 +154,92 @@ def _lookup_coordinates_via_tavily(company_name: str) -> Optional[Tuple[float, f
 
     import re
 
+    # Broader queries — covers factories, HQs, tech companies, etc.
     queries = [
-        f"{company_name} factory location GPS latitude longitude India",
-        f"{company_name} manufacturing plant address coordinates India",
+        f"{company_name} headquarters location India",
+        f"{company_name} corporate office address city India",
+        f"{company_name} registered office India latitude longitude",
     ]
 
-    # Regex: decimal degrees like 18.5200, 73.8500 or -33.9, 151.2
-    _coord_re = re.compile(
-        r"(-?\d{1,3}\.\d{2,6})[^\d-]{1,10}(-?\d{1,3}\.\d{2,6})"
+    # Pattern 1: explicit lat/lon labels  e.g. "Latitude: 12.97  Longitude: 77.59"
+    _labeled_re = re.compile(
+        r"lat(?:itude)?[:\s]+(-?\d{1,3}\.\d{2,7})[^\d-]{1,20}"
+        r"lon(?:gitude)?[:\s]+(-?\d{1,3}\.\d{2,7})",
+        re.IGNORECASE,
     )
+    # Pattern 2: bare decimal pair anywhere in text  e.g. "12.9716, 77.5946"
+    _bare_re = re.compile(
+        r"(-?\d{1,3}\.\d{3,7})\s*[,|/]\s*(-?\d{1,3}\.\d{3,7})"
+    )
+
+    # India city → approximate (lat, lon)
+    _CITY_COORDS: Dict[str, Tuple[float, float]] = {
+        "mumbai":          (19.076,  72.877),
+        "delhi":           (28.613,  77.209),
+        "new delhi":       (28.613,  77.209),
+        "bengaluru":       (12.972,  77.594),
+        "bangalore":       (12.972,  77.594),
+        "hyderabad":       (17.385,  78.486),
+        "chennai":         (13.083,  80.270),
+        "kolkata":         (22.573,  88.363),
+        "pune":            (18.520,  73.856),
+        "ahmedabad":       (23.023,  72.572),
+        "surat":           (21.170,  72.831),
+        "jaipur":          (26.912,  75.787),
+        "lucknow":         (26.847,  80.947),
+        "kanpur":          (26.450,  80.331),
+        "nagpur":          (21.146,  79.089),
+        "indore":          (22.719,  75.857),
+        "bhopal":          (23.259,  77.413),
+        "visakhapatnam":   (17.686,  83.218),
+        "vadodara":        (22.307,  73.181),
+        "coimbatore":      (11.017,  76.955),
+        "agra":            (27.177,  78.008),
+        "chandigarh":      (30.733,  76.779),
+        "noida":           (28.535,  77.391),
+        "gurgaon":         (28.459,  77.026),
+        "gurugram":        (28.459,  77.026),
+        "faridabad":       (28.408,  77.313),
+        "ghaziabad":       (28.670,  77.454),
+        "meerut":          (28.984,  77.707),
+        "nashik":          (19.997,  73.790),
+        "aurangabad":      (19.877,  75.343),
+        "madurai":         (9.939,   78.121),
+        "rajkot":          (22.303,  70.802),
+        "kochi":           (9.931,   76.267),
+        "thiruvananthapuram": (8.524, 76.936),
+        "patna":           (25.594,  85.138),
+        "ranchi":          (23.344,  85.310),
+        "bhubaneswar":     (20.296,  85.825),
+        "guwahati":        (26.144,  91.736),
+        "dehradun":        (30.316,  78.032),
+        "amritsar":        (31.634,  74.872),
+        "ludhiana":        (30.901,  75.857),
+        "jalandhar":       (31.326,  75.576),
+        "jodhpur":         (26.295,  73.017),
+        "udaipur":         (24.571,  73.691),
+        "vijayawada":      (16.506,  80.648),
+        "tirupati":        (13.629,  79.418),
+        "mysuru":          (12.296,  76.641),
+        "mysore":          (12.296,  76.641),
+        "hubli":           (15.364,  75.124),
+        "dharwad":         (15.458,  75.007),
+        "mangaluru":       (12.921,  74.855),
+        "shimla":          (31.104,  77.173),
+        "raipur":          (21.250,  81.630),
+        "bilaspur":        (22.087,  82.148),
+        "jabalpur":        (23.182,  79.987),
+        "gwalior":         (26.221,  78.183),
+        "tiruchirappalli": (10.790,  78.703),
+        "tirunelveli":     (8.727,   77.703),
+        "salem":           (11.664,  78.146),
+        "vellore":         (12.916,  79.132),
+        "trivandrum":      (8.524,   76.936),
+        "calicut":         (11.258,  75.780),
+        "kozhikode":       (11.258,  75.780),
+    }
+
+    all_text_chunks: list = []
 
     try:
         client = TavilyClient(api_key=api_key)
@@ -171,26 +251,53 @@ def _lookup_coordinates_via_tavily(company_name: str) -> Optional[Tuple[float, f
                     max_results=5,
                 )
                 for result in response.get("results", []):
-                    text = " ".join([
+                    chunk = " ".join([
                         result.get("title", ""),
                         result.get("content", ""),
                         result.get("url", ""),
                     ])
-                    for m in _coord_re.finditer(text):
-                        lat_c = float(m.group(1))
-                        lon_c = float(m.group(2))
-                        # Sanity check: valid WGS84 range, India-ish bounding box
+                    all_text_chunks.append(chunk)
+
+                    # -- Strategy 1a: labeled lat/lon -------------------------
+                    m = _labeled_re.search(chunk)
+                    if m:
+                        lat_c, lon_c = float(m.group(1)), float(m.group(2))
                         if 6.0 <= lat_c <= 37.0 and 68.0 <= lon_c <= 97.0:
                             logger.info(
-                                f"Tavily resolved {company_name!r} "
+                                f"Tavily resolved {company_name!r} (labeled) "
                                 f"→ lat={lat_c}, lon={lon_c}"
                             )
                             _COORD_CACHE[company_name] = (lat_c, lon_c)
                             return (lat_c, lon_c)
+
+                    # -- Strategy 1b: bare decimal pair -----------------------
+                    for m in _bare_re.finditer(chunk):
+                        lat_c, lon_c = float(m.group(1)), float(m.group(2))
+                        if 6.0 <= lat_c <= 37.0 and 68.0 <= lon_c <= 97.0:
+                            logger.info(
+                                f"Tavily resolved {company_name!r} (bare pair) "
+                                f"→ lat={lat_c}, lon={lon_c}"
+                            )
+                            _COORD_CACHE[company_name] = (lat_c, lon_c)
+                            return (lat_c, lon_c)
+
             except Exception as e:
                 logger.debug(f"Tavily coordinate query failed: {e}")
+
     except Exception as e:
         logger.warning(f"Tavily coordinate lookup error: {e}")
+
+    # -- Strategy 2: city name extraction from all collected text -------------
+    combined = " ".join(all_text_chunks).lower()
+    for city, coords in _CITY_COORDS.items():
+        # Match whole word (e.g. don't match "pune" inside "unethical")
+        if re.search(r"\b" + re.escape(city) + r"\b", combined):
+            logger.info(
+                f"Tavily city-match {company_name!r} → '{city}' "
+                f"→ lat={coords[0]}, lon={coords[1]}"
+            )
+            _COORD_CACHE[company_name] = coords
+            return coords
 
     logger.warning(
         f"Tavily could not resolve coordinates for {company_name!r} — "
@@ -256,7 +363,7 @@ def _build_evalscript() -> str:
         return {
             input: [{
                 bands: ["B02", "B03", "B04", "B08"],
-                units: "DN"
+                units: "REFLECTANCE"
             }],
             output: {
                 bands: 4,
@@ -266,6 +373,7 @@ def _build_evalscript() -> str:
     }
 
     function evaluatePixel(sample) {
+        // Return surface reflectance values in [0, 1] range
         return [sample.B04, sample.B03, sample.B02, sample.B08];
     }
     """
@@ -369,9 +477,16 @@ def fetch_satellite_image(
             # Parse TIFF bytes into numpy array
             try:
                 from io import BytesIO
+                def _normalize(a: np.ndarray) -> np.ndarray:
+                    """If values are in DN range (>1), scale to 0-1 reflectance."""
+                    if float(np.nanmax(a)) > 1.0:
+                        a = a / 10000.0
+                    return np.clip(a, 0.0, 1.0).astype(np.float32)
+
                 try:
                     import tifffile
                     arr = tifffile.imread(BytesIO(resp.content)).astype(np.float32)
+                    arr = _normalize(arr)
                     logger.info(f"Satellite image fetched (tifffile): shape={arr.shape}")
                     return arr
                 except ImportError:
@@ -380,6 +495,7 @@ def fetch_satellite_image(
                     from PIL import Image
                     img = Image.open(BytesIO(resp.content))
                     arr = np.array(img, dtype=np.float32)
+                    arr = _normalize(arr)
                     logger.info(f"Satellite image fetched (PIL): shape={arr.shape}")
                     return arr
                 except (ImportError, Exception):
@@ -893,7 +1009,20 @@ def get_factory_activity(
 
     today = datetime.now()
     current_date = today.strftime("%Y-%m-%d")
-    baseline_date = (today - timedelta(days=180)).strftime("%Y-%m-%d")
+    # Use same calendar month one year ago as baseline — avoids picking
+    # monsoon season (Jun-Sep) when 180-day offset would land in those months
+    baseline_date = today.replace(year=today.year - 1).strftime("%Y-%m-%d")
+    MONSOON_MONTHS = {6, 7, 8, 9}
+    avoided_month = (today - timedelta(days=180)).month
+    if avoided_month in MONSOON_MONTHS:
+        baseline_date_reason = (
+            f"Monsoon-safe baseline: using 1-year-ago ({baseline_date}) instead of "
+            f"180-day offset which falls in monsoon month "
+            f"{(today - timedelta(days=180)).strftime('%B')} — "
+            f"cloud cover during Jun-Sep makes optical imagery unreliable."
+        )
+    else:
+        baseline_date_reason = f"Year-over-year baseline ({baseline_date}) for accurate temporal comparison."
 
     # ── Attempt Sentinel Hub API ─────────────────────────────────────────
     image_current = fetch_satellite_image(lat, lon, current_date)
@@ -929,10 +1058,11 @@ def get_factory_activity(
 
     # ── Merge results ────────────────────────────────────────────────────
     result = {
-        "company_name":    company_name,
-        "location":        {"lat": lat, "lon": lon},
-        "current_date":    current_date,
-        "baseline_date":   baseline_date,
+        "company_name":        company_name,
+        "location":            {"lat": lat, "lon": lon},
+        "current_date":        current_date,
+        "baseline_date":       baseline_date,
+        "baseline_date_reason": baseline_date_reason,
     }
     result.update(activity_data)
     result.update(revenue_check)
